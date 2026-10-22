@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="description" content="Interactive model of activity-dependent synaptic refinement: correlated spontaneous activity decides which developing synapses are stabilised and which are pruned.">
-<title>Activity-dependent synaptic refinement: in-phase vs out-of-phase firing</title>
+<title>Neuroplasticity course: Activity-dependent synaptic refinement</title>
 <style>
   :root {
     --bg: #0f1420;
@@ -27,7 +27,7 @@
   }
   header { padding: 18px 20px 0; }
   h1 { margin: 0 0 6px; font-size: 1.4rem; }
-  header p { margin: 0 0 4px; color: var(--muted); max-width: 80ch; }
+  header p { margin: 0 0 4px; color: var(--muted); }
   header strong { color: var(--text); }
   header .goal { color: var(--text); }
   main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; padding: 14px 20px; }
@@ -72,12 +72,13 @@
   .g-b legend { color: var(--b); }
   .g-b input { accent-color: var(--b); }
   .maths { margin: 0 20px 24px; }
-  .maths-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .maths h2 { margin: 0; font-size: 1.15rem; }
-  .maths .lead { margin: 4px 0 10px; color: var(--muted); }
+  .maths > summary { cursor: pointer; font-size: 1.15rem; }
+  .maths h2 { display: inline; margin: 0; font-size: inherit; }
+  .maths-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin: 6px 0 10px; }
+  .maths .lead { margin: 0; color: var(--muted); }
   .maths details { border-top: 1px solid var(--line); }
   .maths details:last-of-type { border-bottom: 1px solid var(--line); }
-  .maths summary { cursor: pointer; padding: 10px 4px; font-weight: 600; }
+  .maths details summary { cursor: pointer; padding: 10px 4px; font-weight: 600; }
   .maths .body { padding: 0 4px 16px 22px; }
   .maths p, .maths li { max-width: 90ch; }
   .maths table { margin: 10px 0; }
@@ -90,7 +91,7 @@
 </head>
 <body>
 <header>
-  <h1>Activity-dependent synaptic refinement</h1>
+  <h1>Neuroplasticity course: Activity-dependent synaptic refinement</h1>
   <p class="goal">The visualisation below was created as part of a Neuroplasticity course. It shows how the relative timing of pre- and postsynaptic firing decides which developing synapses are kept and which are pruned.</p>
   <p>During development, axons initially form redundant, diffuse connections. Spontaneous retinal waves then refine them: synapses whose pre- and postsynaptic neurons fire in phase are potentiated and stabilised, while those whose partners fire out of phase are depressed and pruned.</p>
   <p>Choose a scenario, press <strong>Start retinal wave</strong>, and follow the synaptic weights. All parameters can be changed while the simulation runs.</p>
@@ -170,12 +171,12 @@
   </aside>
 </main>
 
-<section class="card maths" aria-labelledby="maths-title">
+<details class="card maths">
+  <summary><h2>The maths, explained</h2></summary>
   <div class="maths-head">
-    <h2 id="maths-title">The maths, explained</h2>
+    <p class="lead">Every equation the simulation uses: what it says, what each symbol means, and why it produces what you see. Click an item to expand it.</p>
     <button id="mathsToggle" type="button">Open all</button>
   </div>
-  <p class="lead">Every equation the simulation uses: what it says, what each symbol means, and why it produces what you see. Click an item to expand it.</p>
 
   <details>
     <summary>1. Firing rate of each population</summary>
@@ -443,7 +444,7 @@
       </ul>
     </div>
   </details>
-</section>
+</details>
 <noscript><p>This page needs JavaScript.</p></noscript>
 
 <script>
