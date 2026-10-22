@@ -1,0 +1,1001 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Interactive model of activity-dependent synaptic refinement: correlated spontaneous activity decides which developing synapses are stabilised and which are pruned.">
+<title>Activity-dependent synaptic refinement: in-phase vs out-of-phase firing</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171e2e;
+    --line: #2a3348;
+    --text: #e6e9ef;
+    --muted: #9aa4b5;
+    --retina: #f2a541;
+    --a: #4ea8de;
+    --b: #c77dff;
+    --match: #2ec4b6;
+    --mismatch: #ff6b6b;
+    --bdnf: #9be564;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0 auto; max-width: 1400px; color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  header { padding: 18px 20px 0; }
+  h1 { margin: 0 0 6px; font-size: 1.4rem; }
+  header p { margin: 0 0 4px; color: var(--muted); max-width: 80ch; }
+  header strong { color: var(--text); }
+  header .goal { color: var(--text); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; padding: 14px 20px; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .stage { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  canvas { display: block; width: 100%; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 2px 0; color: var(--muted); font-size: 0.85rem; }
+  .legend .dot::before, .legend .swatch::before {
+    content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px;
+    vertical-align: -1px; background: var(--c);
+  }
+  .legend .dot::before { border-radius: 50%; }
+  .legend .swatch::before { border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .readout th[scope="row"] { color: var(--muted); font-weight: 400; }
+  .ca { color: var(--a); }
+  .cb { color: var(--b); }
+  .note { margin: 8px 2px 0; color: var(--muted); font-size: 0.9rem; }
+  .controls { display: grid; gap: 12px; align-content: start; }
+  .buttons, .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  button {
+    font: inherit; font-size: 0.9rem; color: var(--text); background: #243049;
+    border: 1px solid #34405c; border-radius: 7px; padding: 6px 12px; cursor: pointer;
+  }
+  button:hover { background: #2c3a58; }
+  button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  button.primary { background: #6b4512; border-color: var(--retina); }
+  button.primary:hover { background: #82561a; }
+  button[data-preset][aria-pressed="true"] { background: #34405c; border-color: var(--text); }
+  .msg { margin: 0; min-height: 3em; color: var(--muted); font-size: 0.9rem; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0; padding: 6px 10px 10px; }
+  legend { padding: 0 4px; font-weight: 600; }
+  label { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; margin-top: 6px; font-size: 0.9rem; }
+  label input { grid-column: 1 / -1; width: 100%; margin: 4px 0 0; }
+  output { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .g-r legend { color: var(--retina); }
+  .g-r input { accent-color: var(--retina); }
+  .g-a legend { color: var(--a); }
+  .g-a input { accent-color: var(--a); }
+  .g-b legend { color: var(--b); }
+  .g-b input { accent-color: var(--b); }
+  .maths { margin: 0 20px 24px; }
+  .maths-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .maths h2 { margin: 0; font-size: 1.15rem; }
+  .maths .lead { margin: 4px 0 10px; color: var(--muted); }
+  .maths details { border-top: 1px solid var(--line); }
+  .maths details:last-of-type { border-bottom: 1px solid var(--line); }
+  .maths summary { cursor: pointer; padding: 10px 4px; font-weight: 600; }
+  .maths .body { padding: 0 4px 16px 22px; }
+  .maths p, .maths li { max-width: 90ch; }
+  .maths table { margin: 10px 0; }
+  .maths table.cases { width: auto; }
+  .maths thead th { color: var(--muted); }
+  .maths td:first-child { white-space: nowrap; }
+  math { font-family: math, "Cambria Math", "STIX Two Math", "Latin Modern Math", serif; font-size: 1.1em; }
+  math[display="block"] { margin: 12px 0; font-size: 1.25em; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Activity-dependent synaptic refinement</h1>
+  <p class="goal">The visualisation below was created as part of a Neuroplasticity course. It shows how the relative timing of pre- and postsynaptic firing decides which developing synapses are kept and which are pruned.</p>
+  <p>During development, axons initially form redundant, diffuse connections. Spontaneous retinal waves then refine them: synapses whose pre- and postsynaptic neurons fire in phase are potentiated and stabilised, while those whose partners fire out of phase are depressed and pruned.</p>
+  <p>Choose a scenario, press <strong>Start retinal wave</strong>, and follow the synaptic weights. All parameters can be changed while the simulation runs.</p>
+</header>
+
+<main>
+  <section class="stage" aria-label="Simulation">
+    <div class="card">
+      <canvas id="scene" role="img" aria-label="Schematic: a row of retinal neurons projects to two target populations, A and B. Brightness shows firing rate; line width shows synaptic weight."></canvas>
+      <div class="legend">
+        <span class="dot" style="--c: var(--retina)">Retina (presynaptic)</span>
+        <span class="dot" style="--c: var(--a)">Target A (postsynaptic)</span>
+        <span class="dot" style="--c: var(--b)">Target B (postsynaptic)</span>
+        <span class="dot" style="--c: var(--bdnf)">BDNF: coincident pre- and postsynaptic firing</span>
+        <span class="swatch" style="--c: var(--match)">potentiation</span>
+        <span class="swatch" style="--c: var(--mismatch)">depression</span>
+        <span>Brightness = firing rate; line width = synaptic weight</span>
+      </div>
+    </div>
+    <div class="card">
+      <canvas id="plots" role="img" aria-label="Firing rates of the retina and of each target over the last 8 seconds, and both synaptic weights over the last 60 seconds."></canvas>
+    </div>
+    <div class="card">
+      <table class="readout">
+        <thead>
+          <tr><th scope="col"></th><th scope="col" class="ca">Synapse R→A</th><th scope="col" class="cb">Synapse R→B</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Phase difference to the retina (Δφ)</th><td id="gapA"></td><td id="gapB"></td></tr>
+          <tr><th scope="row">Mean Hebbian drive, last 6 s</th><td id="avgA"></td><td id="avgB"></td></tr>
+          <tr><th scope="row">Expected mean drive: ½ cos Δφ</th><td id="expA"></td><td id="expB"></td></tr>
+          <tr><th scope="row">Synaptic weight w</th><td id="wA"></td><td id="wB"></td></tr>
+          <tr><th scope="row">Status</th><td id="stA"></td><td id="stB"></td></tr>
+        </tbody>
+      </table>
+      <p class="note" id="gapAB"></p>
+    </div>
+  </section>
+
+  <aside class="card controls" aria-label="Controls">
+    <div class="buttons">
+      <button id="retina" class="primary" type="button" aria-pressed="false">Start retinal wave</button>
+      <button id="play" type="button">Pause</button>
+      <button id="restart" type="button" title="Restart the run with the current settings">Restart</button>
+    </div>
+    <p id="msg" class="msg" aria-live="polite"></p>
+    <fieldset>
+      <legend>Scenarios</legend>
+      <div class="presets">
+        <button type="button" data-preset="antiphase">Targets in anti-phase</button>
+        <button type="button" data-preset="inphase">Targets in phase</button>
+        <button type="button" data-preset="quadrature">Quadrature (90°)</button>
+        <button type="button" data-preset="drift">Frequency mismatch</button>
+      </div>
+    </fieldset>
+    <fieldset class="g-r">
+      <legend>Retina (presynaptic)</legend>
+      <label>Frequency <output id="fROut"></output><input id="fR" type="range" min="0.1" max="1.5" step="0.05"></label>
+      <label>Phase <output id="phROut"></output><input id="phR" type="range" min="0" max="355" step="5"></label>
+    </fieldset>
+    <fieldset class="g-a">
+      <legend>Target A (postsynaptic)</legend>
+      <label>Frequency <output id="fAOut"></output><input id="fA" type="range" min="0.1" max="1.5" step="0.05"></label>
+      <label>Phase <output id="phAOut"></output><input id="phA" type="range" min="0" max="355" step="5"></label>
+    </fieldset>
+    <fieldset class="g-b">
+      <legend>Target B (postsynaptic)</legend>
+      <label>Frequency <output id="fBOut"></output><input id="fB" type="range" min="0.1" max="1.5" step="0.05"></label>
+      <label>Phase <output id="phBOut"></output><input id="phB" type="range" min="0" max="355" step="5"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Simulation</legend>
+      <label>Learning rate <output id="etaOut"></output><input id="eta" type="range" min="0" max="0.5" step="0.01"></label>
+      <label>Noise <output id="noiseOut"></output><input id="noise" type="range" min="0" max="0.3" step="0.01"></label>
+      <label>Simulation speed <output id="speedOut"></output><input id="speed" type="range" min="0.25" max="3" step="0.25"></label>
+    </fieldset>
+  </aside>
+</main>
+
+<section class="card maths" aria-labelledby="maths-title">
+  <div class="maths-head">
+    <h2 id="maths-title">The maths, explained</h2>
+    <button id="mathsToggle" type="button">Open all</button>
+  </div>
+  <p class="lead">Every equation the simulation uses: what it says, what each symbol means, and why it produces what you see. Click an item to expand it.</p>
+
+  <details>
+    <summary>1. Firing rate of each population</summary>
+    <div class="body">
+      <math display="block">
+        <msub><mi>r</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo>
+        <mfrac><mn>1</mn><mn>2</mn></mfrac><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac>
+        <mi>sin</mi><mrow><mo stretchy="false">(</mo><msub><mi>θ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>+</mo><msub><mi>φ</mi><mi>X</mi></msub><mo stretchy="false">)</mo></mrow>
+        <mo>+</mo><mi>σ</mi><msub><mi>ξ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo>
+      </math>
+      <math display="block">
+        <msub><mi>θ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo><mn>2</mn><mi>π</mi><msub><mi>f</mi><mi>X</mi></msub><mi>t</mi>
+      </math>
+      <table class="sym">
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Set by</th></tr></thead>
+        <tbody>
+          <tr><td><math><mi>X</mi></math></td><td>Population: R (retina), A or B (targets)</td><td>–</td></tr>
+          <tr><td><math><msub><mi>r</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></math></td><td>Normalised firing rate of population X at time t: 0 = silent, 1 = maximal</td><td>computed</td></tr>
+          <tr><td><math><msub><mi>f</mi><mi>X</mi></msub></math></td><td>Oscillation frequency: cycles per second</td><td>Frequency slider (Hz)</td></tr>
+          <tr><td><math><msub><mi>θ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></math></td><td>Oscillation phase; 2π (= 360°) is one full cycle</td><td>grows with time</td></tr>
+          <tr><td><math><msub><mi>φ</mi><mi>X</mi></msub></math></td><td>Phase offset: shifts the oscillation earlier or later</td><td>Phase slider (°)</td></tr>
+          <tr><td><math><mi>σ</mi></math></td><td>Noise strength</td><td>Noise slider</td></tr>
+          <tr><td><math><msub><mi>ξ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></math></td><td>Noise (see 3)</td><td>computed</td></tr>
+        </tbody>
+      </table>
+      <p>Each population's firing rate oscillates between silent and maximal, <math><msub><mi>f</mi><mi>X</mi></msub></math> times per second; the phase offset sets when the peaks occur. The result is clipped to stay between 0 and 1. A silent retina is simply <math><msub><mi>r</mi><mi>R</mi></msub><mo>=</mo><mn>0</mn></math>.</p>
+      <p>Real retinal waves are bursts of correlated firing separated by long silent intervals; the sinusoid is a simplification, and simulated time is compressed.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>2. Propagating wave across each population</summary>
+    <div class="body">
+      <math display="block">
+        <msub><mi>r</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>u</mi><mo>,</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo>
+        <mfrac><mn>1</mn><mn>2</mn></mfrac><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac>
+        <mi>sin</mi><mrow><mo>(</mo><msub><mi>θ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>+</mo><msub><mi>φ</mi><mi>X</mi></msub><mo>−</mo><mn>2</mn><mi>π</mi><mrow><mo>(</mo><mi>u</mi><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>)</mo></mrow><mo>)</mo></mrow>
+      </math>
+      <table class="sym">
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Set by</th></tr></thead>
+        <tbody>
+          <tr><td><math><mi>u</mi></math></td><td>Position of a neuron across the population: 0 = first, 1 = last</td><td>fixed</td></tr>
+          <tr><td><math><mi>u</mi><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac></math></td><td>The centre neuron, whose rate enters the learning rule (ringed in the schematic)</td><td>fixed</td></tr>
+          <tr><td><math><mn>2</mn><mi>π</mi><mrow><mo>(</mo><mi>u</mi><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>)</mo></mrow></math></td><td>Phase lag of each neuron relative to the centre neuron; across the population it spans one full cycle</td><td>fixed</td></tr>
+        </tbody>
+      </table>
+      <p>Each neuron lags slightly behind its neighbour, so the peak of activity propagates across the population, as a retinal wave sweeps across the retina. This only affects the display: the learning rule uses the centre neuron, and at <math><mi>u</mi><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac></math> this is exactly equation 1.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>3. Noise: Ornstein–Uhlenbeck process</summary>
+    <div class="body">
+      <math display="block">
+        <mi>ξ</mi><mo>←</mo><mi>ξ</mi><mo>−</mo><mfrac><mi>ξ</mi><mi>τ</mi></mfrac><mi mathvariant="normal">Δ</mi><mi>t</mi>
+        <mo>+</mo><msqrt><mfrac><mrow><mn>2</mn><mi mathvariant="normal">Δ</mi><mi>t</mi></mrow><mi>τ</mi></mfrac></msqrt><mo>⋅</mo><mi>z</mi>
+      </math>
+      <table class="sym">
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Set by</th></tr></thead>
+        <tbody>
+          <tr><td><math><mi>ξ</mi></math></td><td>Noise variable, with unit variance</td><td>computed, independently per population</td></tr>
+          <tr><td><math><mo>←</mo></math></td><td>“Replace with”: the update done at every time step</td><td>–</td></tr>
+          <tr><td><math><mi>τ</mi></math></td><td>Correlation time of the noise</td><td>0.25 s</td></tr>
+          <tr><td><math><mi mathvariant="normal">Δ</mi><mi>t</mi></math></td><td>Length of one time step</td><td>1/240 s</td></tr>
+          <tr><td><math><mi>z</mi></math></td><td>Independent standard normal random number (mean 0, variance 1)</td><td>new every step</td></tr>
+        </tbody>
+      </table>
+      <p>This is the Euler–Maruyama update of an Ornstein–Uhlenbeck process: the middle term relaxes ξ towards 0 and the last term adds Gaussian increments, giving temporally correlated noise rather than independent jumps. The Noise slider <math><mi>σ</mi></math> scales it in equation 1.</p>
+      <p>The noise is independent between populations, so it adds no correlation between them: it blurs the timing but leaves the mean drive unchanged, apart from small effects where a rate is clipped at 0 or 1.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>4. Phase difference Δφ and phase drift</summary>
+    <div class="body">
+      <math display="block">
+        <mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mi>X</mi></msub><mo>=</mo>
+        <mrow><mo stretchy="false">(</mo><msub><mi>θ</mi><mi>X</mi></msub><mo>+</mo><msub><mi>φ</mi><mi>X</mi></msub><mo stretchy="false">)</mo></mrow><mo>−</mo>
+        <mrow><mo stretchy="false">(</mo><msub><mi>θ</mi><mi>R</mi></msub><mo>+</mo><msub><mi>φ</mi><mi>R</mi></msub><mo stretchy="false">)</mo></mrow>
+      </math>
+      <p>If the two frequencies differ, the phase difference drifts linearly:</p>
+      <math display="block">
+        <mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>=</mo>
+        <mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mn>0</mn><mo stretchy="false">)</mo><mo>+</mo>
+        <mn>2</mn><mi>π</mi><mrow><mo stretchy="false">(</mo><msub><mi>f</mi><mi>X</mi></msub><mo>−</mo><msub><mi>f</mi><mi>R</mi></msub><mo stretchy="false">)</mo></mrow><mi>t</mi>
+        <mspace width="2em"/>
+        <msub><mi>T</mi><mtext>beat</mtext></msub><mo>=</mo>
+        <mfrac><mn>1</mn><mrow><mo>|</mo><msub><mi>f</mi><mi>X</mi></msub><mo>−</mo><msub><mi>f</mi><mi>R</mi></msub><mo>|</mo></mrow></mfrac>
+      </math>
+      <table class="sym">
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Set by</th></tr></thead>
+        <tbody>
+          <tr><td><math><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mi>X</mi></msub></math></td><td>Phase difference between the retina and target X: 0° = in phase (peaks coincide), 90° = quadrature, 180° = anti-phase (peak of one at the trough of the other)</td><td>computed</td></tr>
+          <tr><td><math><msub><mi>T</mi><mtext>beat</mtext></msub></math></td><td>Beat period: time for Δφ to drift through a full 360°</td><td>computed</td></tr>
+        </tbody>
+      </table>
+      <p>The readout table shows |Δφ|, between 0° and 180°; which population leads does not matter for the rule. With equal frequencies Δφ stays at the value set by the phase sliders. With a frequency mismatch it drifts: 0.6 Hz against 0.5 Hz gives <math><msub><mi>T</mi><mtext>beat</mtext></msub><mo>=</mo><mn>1</mn><mo>/</mo><mn>0.1</mn><mo>=</mo><mn>10</mn></math> s, so the two populations move into and out of phase every 10 s. Restart resets every θ to 0, so Δφ matches the sliders again.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>5. Learning rule: presynaptically gated Hebbian plasticity</summary>
+    <div class="body">
+      <math display="block">
+        <mfrac><mrow><mi>d</mi><msub><mi>w</mi><mi>X</mi></msub></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac>
+        <mo>=</mo><mi>η</mi><mo>⋅</mo><msub><mi>p</mi><mi>X</mi></msub>
+      </math>
+      <math display="block">
+        <msub><mi>p</mi><mi>X</mi></msub><mo>=</mo><mn>4</mn><mo>⋅</mo><msub><mi>r</mi><mi>R</mi></msub><mo>⋅</mo>
+        <mrow><mo>(</mo><msub><mi>r</mi><mi>X</mi></msub><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>)</mo></mrow>
+      </math>
+      <table class="sym">
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Set by</th></tr></thead>
+        <tbody>
+          <tr><td><math><msub><mi>w</mi><mi>X</mi></msub></math></td><td>Synaptic weight of the retina→X synapse, drawn as line width; starts at 0.5</td><td>computed</td></tr>
+          <tr><td><math><mfrac><mrow><mi>d</mi><msub><mi>w</mi><mi>X</mi></msub></mrow><mrow><mi>d</mi><mi>t</mi></mrow></mfrac></math></td><td>Rate of change of the weight</td><td>–</td></tr>
+          <tr><td><math><mi>η</mi></math></td><td>Learning rate</td><td>Learning rate slider (per second)</td></tr>
+          <tr><td><math><msub><mi>p</mi><mi>X</mi></msub></math></td><td>Instantaneous Hebbian drive</td><td>computed</td></tr>
+          <tr><td><math><msub><mi>r</mi><mi>R</mi></msub></math></td><td>Presynaptic (retinal) firing rate; 0 while the retina is silent</td><td>equation 1</td></tr>
+          <tr><td><math><msub><mi>r</mi><mi>X</mi></msub><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac></math></td><td>Postsynaptic rate relative to the threshold ½: positive above, negative below</td><td>–</td></tr>
+          <tr><td><math><mn>4</mn></math></td><td>Normalisation, chosen so that the mean drive equals ½ cos Δφ (see 6)</td><td>fixed</td></tr>
+        </tbody>
+      </table>
+      <table class="cases">
+        <thead><tr><th scope="col">Presynaptic</th><th scope="col">Postsynaptic</th><th scope="col">Drive</th><th scope="col">Effect</th></tr></thead>
+        <tbody>
+          <tr><td>firing (<math><msub><mi>r</mi><mi>R</mi></msub><mo>=</mo><mn>1</mn></math>)</td><td>firing (<math><msub><mi>r</mi><mi>X</mi></msub><mo>=</mo><mn>1</mn></math>)</td><td>+2</td><td>potentiation (BDNF release)</td></tr>
+          <tr><td>firing (<math><msub><mi>r</mi><mi>R</mi></msub><mo>=</mo><mn>1</mn></math>)</td><td>silent (<math><msub><mi>r</mi><mi>X</mi></msub><mo>=</mo><mn>0</mn></math>)</td><td>−2</td><td>depression</td></tr>
+          <tr><td>silent (<math><msub><mi>r</mi><mi>R</mi></msub><mo>=</mo><mn>0</mn></math>)</td><td>anything</td><td>0</td><td>no change</td></tr>
+        </tbody>
+      </table>
+      <p>The weight saturates at 1 (shown as “stabilised”). If it falls below 0.05, the synapse is pruned and stays eliminated until Restart.</p>
+      <p>Plasticity is gated by presynaptic activity. When the retina fires and the target fires with it, the synapse is potentiated (coincident firing triggers BDNF release); when the retina fires but the target does not, it is depressed. While the retina is silent the weights do not change, consistent with the finding that blocking activity before birth leaves retinal projections unsegregated rather than eliminating them (Shatz &amp; Stryker, 1988).</p>
+      <p>This combines Hebb's postulate (“cells that fire together, wire together”) with its complement, that inputs firing out of sync with their target are weakened (Stent, 1973), often summarised as “out of sync, lose your link”.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>6. Derivation: mean drive = ½ cos Δφ</summary>
+    <div class="body">
+      <p>Take equal frequencies and no noise, write <math><mi>ω</mi><mo>=</mo><mn>2</mn><mi>π</mi><mi>f</mi></math>, and set t = 0 at a rising zero crossing of the retinal oscillation:</p>
+      <math display="block">
+        <msub><mi>r</mi><mi>R</mi></msub><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>sin</mi><mspace width="0.17em"/><mi>ω</mi><mi>t</mi>
+        <mspace width="2em"/>
+        <msub><mi>r</mi><mi>X</mi></msub><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mo>+</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>sin</mi><mrow><mo>(</mo><mi>ω</mi><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mi>φ</mi><mo>)</mo></mrow>
+      </math>
+      <p><strong>Step 1.</strong> Substitute into the drive from equation 5 and expand:</p>
+      <math display="block">
+        <msub><mi>p</mi><mi>X</mi></msub><mo>=</mo>
+        <mrow><mo>(</mo><mn>1</mn><mo>+</mo><mi>sin</mi><mspace width="0.17em"/><mi>ω</mi><mi>t</mi><mo>)</mo></mrow><mi>sin</mi><mrow><mo>(</mo><mi>ω</mi><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mi>φ</mi><mo>)</mo></mrow>
+        <mo>=</mo>
+        <mi>sin</mi><mrow><mo>(</mo><mi>ω</mi><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mi>φ</mi><mo>)</mo></mrow>
+        <mo>+</mo>
+        <mi>sin</mi><mspace width="0.17em"/><mi>ω</mi><mi>t</mi><mo>⋅</mo><mi>sin</mi><mrow><mo>(</mo><mi>ω</mi><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mi>φ</mi><mo>)</mo></mrow>
+      </math>
+      <p><strong>Step 2.</strong> Apply the product-to-sum identity <math><mi>sin</mi><mspace width="0.17em"/><mi>a</mi><mo>⋅</mo><mi>sin</mi><mspace width="0.17em"/><mi>b</mi><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mrow><mo>[</mo><mi>cos</mi><mrow><mo>(</mo><mi>a</mi><mo>−</mo><mi>b</mi><mo>)</mo></mrow><mo>−</mo><mi>cos</mi><mrow><mo>(</mo><mi>a</mi><mo>+</mo><mi>b</mi><mo>)</mo></mrow><mo>]</mo></mrow></math>:</p>
+      <math display="block">
+        <mi>sin</mi><mspace width="0.17em"/><mi>ω</mi><mi>t</mi><mo>⋅</mo><mi>sin</mi><mrow><mo>(</mo><mi>ω</mi><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mi>φ</mi><mo>)</mo></mrow>
+        <mo>=</mo>
+        <mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mspace width="0.17em"/><mi mathvariant="normal">Δ</mi><mi>φ</mi>
+        <mo>−</mo>
+        <mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mrow><mo>(</mo><mn>2</mn><mi>ω</mi><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><mi>φ</mi><mo>)</mo></mrow>
+      </math>
+      <p><strong>Step 3.</strong> Take the time average over a full cycle, written ⟨ ⟩. Every term that still depends on t oscillates symmetrically and averages to 0, leaving only the constant term:</p>
+      <math display="block">
+        <mrow><mo>⟨</mo><msub><mi>p</mi><mi>X</mi></msub><mo>⟩</mo></mrow><mo>=</mo>
+        <mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mspace width="0.17em"/><mi mathvariant="normal">Δ</mi><mi>φ</mi>
+      </math>
+      <table class="cases">
+        <thead><tr><th scope="col">Δφ</th><th scope="col">Mean drive</th><th scope="col">Effect on w</th></tr></thead>
+        <tbody>
+          <tr><td>0° (in phase)</td><td>+0.50</td><td>fastest potentiation</td></tr>
+          <tr><td>60°</td><td>+0.25</td><td>slow potentiation</td></tr>
+          <tr><td>90° (quadrature)</td><td>0</td><td>no net change</td></tr>
+          <tr><td>120°</td><td>−0.25</td><td>slow depression</td></tr>
+          <tr><td>180° (anti-phase)</td><td>−0.50</td><td>fastest depression</td></tr>
+        </tbody>
+      </table>
+      <p><strong>Frequency mismatch.</strong> With <math><msub><mi>ω</mi><mi>R</mi></msub><mo>≠</mo><msub><mi>ω</mi><mi>X</mi></msub></math> and an initial phase difference <math><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mn>0</mn></msub></math>, step 2 becomes</p>
+      <math display="block">
+        <mi>sin</mi><mspace width="0.17em"/><msub><mi>ω</mi><mi>R</mi></msub><mi>t</mi><mo>⋅</mo><mi>sin</mi><mrow><mo stretchy="false">(</mo><msub><mi>ω</mi><mi>X</mi></msub><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mn>0</mn></msub><mo stretchy="false">)</mo></mrow>
+        <mo>=</mo>
+        <mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mrow><mo stretchy="false">(</mo><mrow><mo stretchy="false">(</mo><msub><mi>ω</mi><mi>X</mi></msub><mo>−</mo><msub><mi>ω</mi><mi>R</mi></msub><mo stretchy="false">)</mo></mrow><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mn>0</mn></msub><mo stretchy="false">)</mo></mrow>
+        <mo>−</mo>
+        <mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mrow><mo stretchy="false">(</mo><mrow><mo stretchy="false">(</mo><msub><mi>ω</mi><mi>X</mi></msub><mo>+</mo><msub><mi>ω</mi><mi>R</mi></msub><mo stretchy="false">)</mo></mrow><mi>t</mi><mo>+</mo><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mn>0</mn></msub><mo stretchy="false">)</mo></mrow>
+      </math>
+      <p>Both terms now depend on t, so the long-run mean drive is 0. The first term varies slowly, at the beat frequency (see 4), so the weight still oscillates for several seconds at a time without net change.</p>
+      <p>In the readout table, “Expected mean drive” is this formula and “Mean Hebbian drive, last 6 s” is the value measured in the simulation; they agree up to noise.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>7. Competition between the two synapses</summary>
+    <div class="body">
+      <p>Suppose targets A and B fire in anti-phase. A 180° shift inverts a sinusoid, so with equal frequencies and no noise:</p>
+      <math display="block">
+        <msub><mi>φ</mi><mi>B</mi></msub><mo>=</mo><msub><mi>φ</mi><mi>A</mi></msub><mo>+</mo><mn>180°</mn>
+        <mspace width="1em"/><mo>⇒</mo><mspace width="1em"/>
+        <msub><mi>r</mi><mi>B</mi></msub><mo>=</mo><mn>1</mn><mo>−</mo><msub><mi>r</mi><mi>A</mi></msub>
+        <mspace width="1em"/><mo>⇒</mo><mspace width="1em"/>
+        <msub><mi>p</mi><mi>B</mi></msub><mo>=</mo><mo>−</mo><msub><mi>p</mi><mi>A</mi></msub>
+      </math>
+      <math display="block">
+        <mrow><mo>⟨</mo><msub><mi>p</mi><mi>A</mi></msub><mo>⟩</mo></mrow><mo>=</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mspace width="0.17em"/><mi mathvariant="normal">Δ</mi><mi>φ</mi>
+        <mspace width="2em"/>
+        <mrow><mo>⟨</mo><msub><mi>p</mi><mi>B</mi></msub><mo>⟩</mo></mrow><mo>=</mo><mo>−</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mspace width="0.17em"/><mi mathvariant="normal">Δ</mi><mi>φ</mi>
+      </math>
+      <p>Here Δφ is the phase difference between the retina and A. At every moment the drive on R→B is the negative of the drive on R→A, so the retina can be in phase with only one target: one synapse is stabilised and the other is pruned.</p>
+      <ul>
+        <li>Retina in quadrature (90°) with both targets: both mean drives are 0 and neither synapse is selected.</li>
+        <li>Targets in phase with each other: both synapses receive the same drive and both are stabilised, so there is no selection.</li>
+      </ul>
+      <p>Anti-correlated activity in the targets is therefore what turns Hebbian plasticity into competition between synapses.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>8. Time to stabilisation or pruning</summary>
+    <div class="body">
+      <p>Averaging over the fluctuations within each cycle, the weight changes linearly in time:</p>
+      <math display="block">
+        <msub><mi>w</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo><mo>≈</mo><msub><mi>w</mi><mn>0</mn></msub><mo>+</mo>
+        <mi>η</mi><mo>⋅</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mspace width="0.17em"/><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mi>X</mi></msub><mo>⋅</mo><mi>t</mi>
+      </math>
+      <p>Solving for the time at which it reaches 1 (stabilised) or 0.05 (pruned):</p>
+      <math display="block">
+        <msub><mi>T</mi><mtext>stable</mtext></msub><mo>=</mo>
+        <mfrac><mrow><mn>1</mn><mo>−</mo><msub><mi>w</mi><mn>0</mn></msub></mrow><mrow><mi>η</mi><mo>⋅</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mi>cos</mi><mspace width="0.17em"/><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mi>X</mi></msub></mrow></mfrac>
+        <mspace width="2em"/>
+        <msub><mi>T</mi><mtext>prune</mtext></msub><mo>=</mo>
+        <mfrac><mrow><msub><mi>w</mi><mn>0</mn></msub><mo>−</mo><mn>0.05</mn></mrow><mrow><mi>η</mi><mo>⋅</mo><mfrac><mn>1</mn><mn>2</mn></mfrac><mrow><mo>|</mo><mi>cos</mi><mspace width="0.17em"/><mi mathvariant="normal">Δ</mi><msub><mi>φ</mi><mi>X</mi></msub><mo>|</mo></mrow></mrow></mfrac>
+      </math>
+      <table class="sym">
+        <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Set by</th></tr></thead>
+        <tbody>
+          <tr><td><math><msub><mi>w</mi><mn>0</mn></msub></math></td><td>Weight when the retinal wave starts</td><td>0.5 after Restart</td></tr>
+          <tr><td><math><msub><mi>T</mi><mtext>stable</mtext></msub></math></td><td>Time to reach w = 1; only when the mean drive is positive (|Δφ| &lt; 90°)</td><td>computed</td></tr>
+          <tr><td><math><msub><mi>T</mi><mtext>prune</mtext></msub></math></td><td>Time to fall to the pruning threshold 0.05; only when the mean drive is negative (|Δφ| &gt; 90°)</td><td>computed</td></tr>
+        </tbody>
+      </table>
+      <p>With the default settings (<math><msub><mi>w</mi><mn>0</mn></msub><mo>=</mo><mn>0.5</mn></math>, <math><mi>η</mi><mo>=</mo><mn>0.1</mn></math>) in the anti-phase scenario, A is in phase with the retina, so <math><msub><mi>T</mi><mtext>stable</mtext></msub><mo>=</mo><mn>0.5</mn><mo>/</mo><mn>0.05</mn><mo>=</mo><mn>10</mn></math> s. B is in anti-phase with the retina, so <math><msub><mi>T</mi><mtext>prune</mtext></msub><mo>=</mo><mn>0.45</mn><mo>/</mo><mn>0.05</mn><mo>=</mo><mn>9</mn></math> s.</p>
+      <p>In the weight plot the trace changes in steps rather than smoothly, because the drive acts only while the retina fires. Doubling the learning rate halves both times; the closer |Δφ| is to 90°, the longer they become, and at exactly 90° neither occurs.</p>
+    </div>
+  </details>
+
+  <details>
+    <summary>9. Numerical method and display</summary>
+    <div class="body">
+      <p>The simulation moves forward in steps of <math><mi mathvariant="normal">Δ</mi><mi>t</mi><mo>=</mo><mn>1</mn><mo>/</mo><mn>240</mn></math> of a simulated second. At every step it updates each population and both synapses (forward Euler method):</p>
+      <math display="block">
+        <msub><mi>θ</mi><mi>X</mi></msub><mo>←</mo><msub><mi>θ</mi><mi>X</mi></msub><mo>+</mo><mn>2</mn><mi>π</mi><msub><mi>f</mi><mi>X</mi></msub><mi mathvariant="normal">Δ</mi><mi>t</mi>
+        <mspace width="2em"/>
+        <msub><mi>w</mi><mi>X</mi></msub><mo>←</mo><mi>min</mi><mrow><mo stretchy="false">(</mo><mn>1</mn><mo>,</mo><msub><mi>w</mi><mi>X</mi></msub><mo>+</mo><mi>η</mi><msub><mi>p</mi><mi>X</mi></msub><mi mathvariant="normal">Δ</mi><mi>t</mi><mo stretchy="false">)</mo></mrow>
+      </math>
+      <ul>
+        <li>Adding <math><mn>2</mn><mi>π</mi><mi>f</mi><mi mathvariant="normal">Δ</mi><mi>t</mi></math> at every step, instead of computing <math><mn>2</mn><mi>π</mi><mi>f</mi><mi>t</mi></math>, means that changing a frequency does not introduce a phase discontinuity.</li>
+        <li>The Simulation speed slider sets how many simulated seconds pass per real second.</li>
+        <li>“Mean Hebbian drive, last 6 s” is the mean of <math><msub><mi>p</mi><mi>X</mi></msub></math> over the last 6 s of retinal activity. Six seconds is three full cycles at 0.5 Hz, so the within-cycle fluctuations cancel.</li>
+      </ul>
+      <p>Display only, not part of the model:</p>
+      <ul>
+        <li>Line width grows with <math><msub><mi>w</mi><mi>X</mi></msub></math>, and neuron brightness shows the firing rate.</li>
+        <li>A synapse is drawn teal while its drive is above +0.3 (potentiation) and coral while it is below −0.3 (depression); the rate plots are shaded the same way.</li>
+        <li>Green BDNF particles appear while the drive is above 0.5 (on average <math><mn>7</mn><mo>×</mo><msub><mi>p</mi><mi>X</mi></msub></math> per second) and travel retrogradely, from the target to the retina.</li>
+      </ul>
+    </div>
+  </details>
+</section>
+<noscript><p>This page needs JavaScript.</p></noscript>
+
+<script>
+(() => {
+  'use strict';
+
+  const DEG = Math.PI / 180;
+  const W0 = 0.5, PRUNE_AT = 0.05, STABLE_AT = 0.98;
+  const TAU_NOISE = 0.25, AVG_WINDOW = 6;
+  const STEP_DT = 1 / 240, SAMPLE_DT = 1 / 60, STRENGTH_DT = 0.1;
+  const WAVE_WINDOW = 8, STRENGTH_WINDOW = 60;
+  const NEURONS = 9, MID = (NEURONS - 1) / 2, RADIUS = 11, TINT_FROM = 0.3;
+
+  const css = getComputedStyle(document.documentElement);
+  const C = {};
+  for (const k of ['retina', 'a', 'b', 'match', 'mismatch', 'bdnf', 'text', 'muted', 'line']) {
+    C[k] = css.getPropertyValue('--' + k).trim();
+  }
+
+  // f (Hz) and ph (degrees) are listed as [retina, A, B]
+  const PRESETS = {
+    antiphase: {
+      f: [0.5, 0.5, 0.5], ph: [0, 0, 180], retinaOn: false,
+      msg: 'Targets A and B fire in anti-phase. Start the retinal wave to see which synapse is stabilised and which is pruned.',
+    },
+    inphase: {
+      f: [0.5, 0.5, 0.5], ph: [0, 0, 0], retinaOn: true,
+      msg: 'Targets A and B fire in phase, so the retina is in phase with both: both synapses are potentiated and there is no selection.',
+    },
+    quadrature: {
+      f: [0.5, 0.5, 0.5], ph: [90, 0, 180], retinaOn: true,
+      msg: 'The retina is in quadrature (90°) with both targets: the mean drive on both synapses is zero.',
+    },
+    drift: {
+      f: [0.6, 0.5, 0.5], ph: [0, 0, 180], retinaOn: true,
+      msg: 'The retina fires at a different frequency, so the phase difference drifts and potentiation alternates with depression: no net change.',
+    },
+  };
+
+  const groups = {
+    R: { f: 0.5, ph: 0, theta: 0, xi: 0, rate: 0 },
+    A: { f: 0.5, ph: 0, theta: 0, xi: 0, rate: 0 },
+    B: { f: 0.5, ph: 180, theta: 0, xi: 0, rate: 0 },
+  };
+  const links = { A: { w: W0, pruned: false, drive: 0 }, B: { w: W0, pruned: false, drive: 0 } };
+  const sim = {
+    t: 0, running: true, retinaOn: false, preset: 'antiphase',
+    eta: 0.1, noise: 0.05, speed: 1, sampleClock: 0, strengthClock: 0,
+  };
+  let waves = [], strengths = [], events = [], particles = [];
+
+  const $ = id => document.getElementById(id);
+  const clamp01 = x => Math.min(1, Math.max(0, x));
+
+  function gauss() {
+    let u = 0;
+    while (u === 0) u = Math.random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+  }
+
+  // firing rate 0..1; lag = phase delay of a neuron relative to the centre neuron (propagating wave)
+  function rateOf(g, lag) {
+    return clamp01(0.5 + 0.5 * Math.sin(g.theta + g.ph * DEG - lag) + sim.noise * g.xi);
+  }
+
+  function gapDeg(from, to) {
+    const d = (groups[to].theta + groups[to].ph * DEG - groups[from].theta - groups[from].ph * DEG) / DEG;
+    return Math.abs((((d % 360) + 540) % 360) - 180);
+  }
+
+  const sameFreq = (a, b) => Math.abs(groups[a].f - groups[b].f) < 1e-9;
+
+  // ---------- simulation ----------
+
+  function step(dt) {
+    sim.t += dt;
+    for (const g of Object.values(groups)) {
+      g.theta = (g.theta + 2 * Math.PI * g.f * dt) % (2 * Math.PI);
+      g.xi += -g.xi * dt / TAU_NOISE + Math.sqrt(2 * dt / TAU_NOISE) * gauss();
+    }
+    const rR = sim.retinaOn ? rateOf(groups.R, 0) : 0;
+    groups.R.rate = rR;
+    for (const k of ['A', 'B']) {
+      const g = groups[k], L = links[k];
+      g.rate = rateOf(g, 0);
+      // coincident firing: potentiation (BDNF); presynaptic firing alone: depression; retina silent: no change
+      L.drive = 4 * rR * (g.rate - 0.5);
+      if (L.pruned) continue;
+      L.w = Math.min(1, L.w + sim.eta * L.drive * dt);
+      if (L.w < PRUNE_AT) {
+        L.w = 0;
+        L.pruned = true;
+        events.push({ t: sim.t, label: 'R→' + k + ' pruned' });
+      } else if (L.drive > 0.5 && Math.random() < 7 * L.drive * dt) {
+        particles.push({ k, s: 1 });
+      }
+    }
+    for (const p of particles) p.s -= dt / 1.2;
+    particles = particles.filter(p => p.s > 0 && !links[p.k].pruned);
+
+    sim.sampleClock += dt;
+    if (sim.sampleClock >= SAMPLE_DT) {
+      sim.sampleClock -= SAMPLE_DT;
+      waves.push({
+        t: sim.t, on: sim.retinaOn, r: rR, a: groups.A.rate, b: groups.B.rate,
+        da: links.A.drive, db: links.B.drive,
+      });
+      while (waves[0].t < sim.t - WAVE_WINDOW - 0.5) waves.shift();
+    }
+    sim.strengthClock += dt;
+    if (sim.strengthClock >= STRENGTH_DT) {
+      sim.strengthClock -= STRENGTH_DT;
+      strengths.push({ t: sim.t, a: links.A.w, b: links.B.w });
+      while (strengths[0].t < sim.t - STRENGTH_WINDOW - 1) strengths.shift();
+    }
+  }
+
+  function meanDrive(k) {
+    let sum = 0, n = 0;
+    for (const s of waves) {
+      if (s.on && s.t >= sim.t - AVG_WINDOW) {
+        sum += k === 'A' ? s.da : s.db;
+        n++;
+      }
+    }
+    return n ? sum / n : 0;
+  }
+
+  // ---------- canvas setup ----------
+
+  const scene = $('scene'), sctx = scene.getContext('2d');
+  const plots = $('plots'), pctx = plots.getContext('2d');
+  const SIZE = { scene: [1000, 350], plots: [1000, 450] };
+  const scale = { scene: 1, plots: 1 };
+
+  function fit(canvas, ctx, key) {
+    const [w, h] = SIZE[key];
+    const s = (canvas.clientWidth || w) / w;
+    const dpr = window.devicePixelRatio || 1;
+    canvas.style.height = h * s + 'px';
+    canvas.width = Math.round(w * s * dpr);
+    canvas.height = Math.round(h * s * dpr);
+    ctx.setTransform(s * dpr, 0, 0, s * dpr, 0, 0);
+    scale[key] = s;
+  }
+
+  let fittedWidth = -1;
+  function refit() {
+    if (scene.clientWidth === fittedWidth) return;
+    fittedWidth = scene.clientWidth;
+    fit(scene, sctx, 'scene');
+    fit(plots, pctx, 'plots');
+  }
+
+  // keeps text at least 11 CSS px when the canvas is scaled down
+  const font = (key, px, weight = 400) => `${weight} ${Math.max(px, 11 / scale[key])}px system-ui, sans-serif`;
+
+  // ---------- scene: neurons, synapses, BDNF ----------
+
+  const LAYOUT = {
+    A: { x0: 90, x1: 430, y: 110 },
+    B: { x0: 570, x1: 910, y: 110 },
+    R: { x0: 330, x1: 670, y: 285 },
+  };
+
+  function neuronPos(key, i) {
+    const L = LAYOUT[key], u = i / (NEURONS - 1);
+    return { u, x: L.x0 + (L.x1 - L.x0) * u, y: L.y };
+  }
+
+  const lerp = (p, q, s) => ({ x: p.x + (q.x - p.x) * s, y: p.y + (q.y - p.y) * s });
+
+  // projection from the centre retinal neuron to the centre neuron of target k
+  function synapsePath(k) {
+    const r = neuronPos('R', MID), t = neuronPos(k, MID);
+    return { p0: { x: r.x, y: r.y - RADIUS - 6 }, p1: { x: t.x, y: t.y + RADIUS + 6 } };
+  }
+
+  function strokeSegment(ctx, { p0, p1 }, s0, s1) {
+    const a = lerp(p0, p1, s0), b = lerp(p0, p1, s1);
+    ctx.beginPath();
+    ctx.moveTo(a.x, a.y);
+    ctx.lineTo(b.x, b.y);
+    ctx.stroke();
+  }
+
+  function drawSynapse(ctx, k) {
+    const L = links[k], path = synapsePath(k);
+    ctx.lineCap = 'round';
+    if (L.pruned) {
+      ctx.strokeStyle = C.muted;
+      ctx.lineWidth = 3;
+      ctx.setLineDash([6, 5]);
+      strokeSegment(ctx, path, 0, 0.15);
+      strokeSegment(ctx, path, 0.85, 1);
+      ctx.setLineDash([]);
+      return;
+    }
+    ctx.lineWidth = 2 + 16 * L.w;
+    ctx.strokeStyle = 'rgba(230, 233, 239, 0.85)';
+    strokeSegment(ctx, path, 0, 1);
+    if (Math.abs(L.drive) > TINT_FROM) {
+      ctx.globalAlpha = Math.min(1, Math.abs(L.drive) / 2);
+      ctx.strokeStyle = L.drive > 0 ? C.match : C.mismatch;
+      strokeSegment(ctx, path, 0, 1);
+      ctx.globalAlpha = 1;
+    }
+  }
+
+  function drawPopulation(ctx, key, color) {
+    const g = groups[key], L = LAYOUT[key], silent = key === 'R' && !sim.retinaOn;
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.roundRect(L.x0 - 28, L.y - 28, L.x1 - L.x0 + 56, 56, 28);
+    ctx.stroke();
+    for (let i = 0; i < NEURONS; i++) {
+      const p = neuronPos(key, i);
+      const r = silent ? 0 : i === MID ? g.rate : rateOf(g, 2 * Math.PI * (p.u - 0.5));
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, RADIUS, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.shadowColor = color;
+      ctx.shadowBlur = 16 * r;
+      ctx.globalAlpha = 0.12 + 0.88 * r;
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      if (i === MID) {
+        ctx.strokeStyle = C.text;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, RADIUS + 5, 0, 2 * Math.PI);
+        ctx.stroke();
+      }
+    }
+  }
+
+  const gapWord = g => (g <= 30 ? 'in phase' : g >= 150 ? 'anti-phase' : Math.abs(g - 90) <= 15 ? 'quadrature' : 'out of phase');
+
+  function drawScene() {
+    const ctx = sctx, [W, H] = SIZE.scene;
+    ctx.clearRect(0, 0, W, H);
+    drawSynapse(ctx, 'A');
+    drawSynapse(ctx, 'B');
+    ctx.fillStyle = C.bdnf;
+    for (const p of particles) {
+      const path = synapsePath(p.k), q = lerp(path.p0, path.p1, p.s);
+      ctx.globalAlpha = 0.25 + 0.75 * p.s;
+      ctx.beginPath(); ctx.arc(q.x, q.y, 4, 0, 2 * Math.PI); ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+    drawPopulation(ctx, 'A', C.a);
+    drawPopulation(ctx, 'B', C.b);
+    drawPopulation(ctx, 'R', C.retina);
+
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.font = font('scene', 16, 600);
+    ctx.fillStyle = C.a;
+    ctx.fillText('Target A', 260, 64);
+    ctx.fillStyle = C.b;
+    ctx.fillText('Target B', 740, 64);
+    ctx.fillStyle = C.retina;
+    ctx.fillText(sim.retinaOn ? 'Retina: spontaneous wave' : 'Retina: silent', 500, 338);
+
+    ctx.font = font('scene', 13);
+    ctx.fillStyle = C.muted;
+    const ab = gapDeg('A', 'B');
+    ctx.fillText(sameFreq('A', 'B') ? `A–B phase difference: ${ab.toFixed(0)}° (${gapWord(ab)})` : 'A–B: phase drift', 500, 64);
+
+    for (const k of ['A', 'B']) {
+      const L = links[k], left = k === 'A', x = left ? 340 : 660;
+      ctx.textAlign = left ? 'right' : 'left';
+      ctx.font = font('scene', 15, 600);
+      ctx.fillStyle = left ? C.a : C.b;
+      ctx.fillText('Synapse R→' + k, x, 206);
+      ctx.font = font('scene', 15);
+      ctx.fillStyle = L.pruned ? C.mismatch : C.text;
+      ctx.fillText(L.pruned ? 'pruned' : L.w >= STABLE_AT ? 'stabilised' : 'w = ' + L.w.toFixed(2), x, 226);
+    }
+  }
+
+  // ---------- plots: waves and strength over time ----------
+
+  const PLOT_L = 80, PLOT_R = 985;
+
+  function plotLine(ctx, data, t0, X, Y, value, color) {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.beginPath();
+    let first = true;
+    for (const s of data) {
+      if (s.t < t0) continue;
+      if (first) { ctx.moveTo(X(s.t), Y(value(s))); first = false; } else ctx.lineTo(X(s.t), Y(value(s)));
+    }
+    ctx.stroke();
+  }
+
+  function drawWaveStrip(ctx, k, top) {
+    const h = 100, w = PLOT_R - PLOT_L;
+    const t1 = Math.max(WAVE_WINDOW, sim.t), t0 = t1 - WAVE_WINDOW;
+    const X = t => PLOT_L + (t - t0) / WAVE_WINDOW * w;
+    const Y = r => top + (1 - r) * h;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = C.text;
+    ctx.font = font('plots', 15, 600);
+    ctx.fillText('Firing rate: retina vs target ' + k, PLOT_L, top - 9);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = C.muted;
+    ctx.font = font('plots', 13);
+    ctx.fillText('firing', PLOT_L - 8, top + 12);
+    ctx.fillText('silent', PLOT_L - 8, top + h);
+    // shade runs of samples with the same sign as single blocks; per-sample rects look striped with noise
+    let runT = null, runSign = 0;
+    const flush = tEnd => {
+      if (runSign === 0) return;
+      ctx.fillStyle = runSign > 0 ? C.match : C.mismatch;
+      ctx.fillRect(X(runT), top, X(tEnd) - X(runT), h);
+    };
+    ctx.globalAlpha = 0.3;
+    for (const s of waves) {
+      if (s.t < t0) continue;
+      const d = k === 'A' ? s.da : s.db;
+      const sign = Math.abs(d) < TINT_FROM ? 0 : Math.sign(d);
+      if (runT === null || sign !== runSign) {
+        if (runT !== null) flush(s.t);
+        runT = s.t;
+        runSign = sign;
+      }
+    }
+    if (runT !== null) flush(waves[waves.length - 1].t);
+    ctx.globalAlpha = 1;
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 1;
+    ctx.strokeRect(PLOT_L, top, w, h);
+    plotLine(ctx, waves, t0, X, Y, s => s.r, C.retina);
+    plotLine(ctx, waves, t0, X, Y, k === 'A' ? s => s.a : s => s.b, k === 'A' ? C.a : C.b);
+  }
+
+  function drawStrengthStrip(ctx, top) {
+    const h = 110, w = PLOT_R - PLOT_L;
+    const t1 = Math.max(STRENGTH_WINDOW, sim.t), t0 = t1 - STRENGTH_WINDOW;
+    const X = t => PLOT_L + (t - t0) / STRENGTH_WINDOW * w;
+    const Y = v => top + (1 - v) * h;
+    ctx.textAlign = 'left';
+    ctx.fillStyle = C.text;
+    ctx.font = font('plots', 15, 600);
+    ctx.fillText('Synaptic weight w', PLOT_L, top - 9);
+
+    ctx.font = font('plots', 13);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = C.muted;
+    ctx.strokeStyle = C.line;
+    ctx.lineWidth = 1;
+    for (const v of [0, 0.5, 1]) {
+      ctx.beginPath(); ctx.moveTo(PLOT_L, Y(v)); ctx.lineTo(PLOT_R, Y(v)); ctx.stroke();
+      ctx.fillText(String(v), PLOT_L - 8, Y(v) + 4);
+    }
+    ctx.setLineDash([5, 5]);
+    ctx.strokeStyle = C.mismatch;
+    ctx.beginPath(); ctx.moveTo(PLOT_L, Y(PRUNE_AT)); ctx.lineTo(PLOT_R, Y(PRUNE_AT)); ctx.stroke();
+    ctx.fillStyle = C.mismatch;
+    ctx.fillText('pruning threshold ' + PRUNE_AT, PLOT_R - 4, Y(PRUNE_AT) - 6);
+
+    ctx.strokeStyle = C.muted;
+    ctx.fillStyle = C.muted;
+    ctx.textAlign = 'left';
+    events.forEach((e, i) => {
+      if (e.t < t0) return;
+      const x = X(e.t);
+      ctx.beginPath(); ctx.moveTo(x, top); ctx.lineTo(x, top + h); ctx.stroke();
+      ctx.fillText(e.label, x + 5, top + 14 + (i % 2) * 16);
+    });
+    ctx.setLineDash([]);
+
+    plotLine(ctx, strengths, t0, X, Y, s => s.a, C.a);
+    plotLine(ctx, strengths, t0, X, Y, s => s.b, C.b);
+
+    ctx.textAlign = 'center';
+    ctx.fillStyle = C.muted;
+    for (let tick = Math.ceil(t0 / 10) * 10; tick <= t1 + 1e-9; tick += 10) {
+      ctx.fillText(tick + ' s', X(tick), top + h + 18);
+    }
+  }
+
+  function drawPlots() {
+    const [W, H] = SIZE.plots;
+    pctx.clearRect(0, 0, W, H);
+    drawWaveStrip(pctx, 'A', 30);
+    drawWaveStrip(pctx, 'B', 172);
+    drawStrengthStrip(pctx, 314);
+  }
+
+  // ---------- readout table ----------
+
+  const signed = x => (Math.abs(x) < 0.005 ? '0.00' : (x > 0 ? '+' : '−') + Math.abs(x).toFixed(2));
+
+  function updateReadout() {
+    for (const k of ['A', 'B']) {
+      const L = links[k], gap = gapDeg('R', k), same = sameFreq('R', k), avg = meanDrive(k);
+      let gapText, expText, status;
+      if (!sim.retinaOn) {
+        gapText = '– (retina silent)';
+        expText = '0';
+      } else if (!same) {
+        gapText = `drifting (now ${gap.toFixed(0)}°)`;
+        expText = '0 on average';
+      } else {
+        gapText = `${gap.toFixed(0)}° (${gapWord(gap)})`;
+        expText = signed(0.5 * Math.cos(gap * DEG));
+      }
+      if (L.pruned) status = 'pruned';
+      else if (L.w >= STABLE_AT) status = 'stabilised';
+      else if (!sim.retinaOn) status = 'waiting for retinal activity';
+      else if (!same) status = 'phase drift: no net change';
+      else if (avg > 0.05) status = 'potentiating';
+      else if (avg < -0.05) status = 'depressing';
+      else status = 'no net change';
+      $('gap' + k).textContent = gapText;
+      $('avg' + k).textContent = signed(avg);
+      $('exp' + k).textContent = expText;
+      $('w' + k).textContent = L.pruned ? '0 (pruned)' : L.w.toFixed(2);
+      $('st' + k).textContent = status;
+    }
+    const ab = gapDeg('A', 'B');
+    $('gapAB').textContent = sameFreq('A', 'B')
+      ? `Phase difference between targets A and B: ${ab.toFixed(0)}° (${gapWord(ab)}).`
+      : 'Targets A and B have different frequencies, so their phase difference drifts.';
+  }
+
+  // ---------- controls ----------
+
+  function setRunning(on) {
+    sim.running = on;
+    $('play').textContent = on ? 'Pause' : 'Play';
+  }
+
+  function setRetina(on, byUser) {
+    sim.retinaOn = on;
+    $('retina').textContent = on ? 'Stop retinal wave' : 'Start retinal wave';
+    $('retina').setAttribute('aria-pressed', String(on));
+    if (!byUser) return;
+    events.push({ t: sim.t, label: on ? 'retinal wave on' : 'retinal wave off' });
+    $('msg').textContent = on
+      ? 'Retinal wave started. The synapse onto the in-phase target is potentiated; the one onto the out-of-phase target is depressed and pruned.'
+      : 'Retina silent: synaptic weights no longer change.';
+  }
+
+  function restart() {
+    Object.assign(sim, { t: 0, sampleClock: 0, strengthClock: 0 });
+    for (const g of Object.values(groups)) Object.assign(g, { theta: 0, xi: 0, rate: 0 });
+    for (const L of Object.values(links)) Object.assign(L, { w: W0, pruned: false, drive: 0 });
+    waves = [];
+    strengths = [];
+    events = [];
+    particles = [];
+    setRetina(PRESETS[sim.preset].retinaOn, false);
+    setRunning(true);
+  }
+
+  const SLIDERS = [
+    ['fR', groups.R, 'f', v => v.toFixed(2) + ' Hz'],
+    ['phR', groups.R, 'ph', v => v + '°'],
+    ['fA', groups.A, 'f', v => v.toFixed(2) + ' Hz'],
+    ['phA', groups.A, 'ph', v => v + '°'],
+    ['fB', groups.B, 'f', v => v.toFixed(2) + ' Hz'],
+    ['phB', groups.B, 'ph', v => v + '°'],
+    ['eta', sim, 'eta', v => v.toFixed(2)],
+    ['noise', sim, 'noise', v => v.toFixed(2)],
+    ['speed', sim, 'speed', v => v + '×'],
+  ];
+
+  function syncSliders() {
+    for (const [id, obj, prop, fmt] of SLIDERS) {
+      $(id).value = obj[prop];
+      $(id + 'Out').textContent = fmt(obj[prop]);
+    }
+  }
+
+  function applyPreset(key) {
+    const p = PRESETS[key];
+    sim.preset = key;
+    ['R', 'A', 'B'].forEach((g, i) => {
+      groups[g].f = p.f[i];
+      groups[g].ph = p.ph[i];
+    });
+    syncSliders();
+    restart();
+    $('msg').textContent = p.msg;
+    for (const b of document.querySelectorAll('[data-preset]')) {
+      b.setAttribute('aria-pressed', String(b.dataset.preset === key));
+    }
+  }
+
+  for (const [id, obj, prop, fmt] of SLIDERS) {
+    $(id).addEventListener('input', e => {
+      obj[prop] = Number(e.target.value);
+      $(id + 'Out').textContent = fmt(obj[prop]);
+    });
+  }
+  $('retina').addEventListener('click', () => setRetina(!sim.retinaOn, true));
+  $('play').addEventListener('click', () => setRunning(!sim.running));
+  $('restart').addEventListener('click', restart);
+  for (const b of document.querySelectorAll('[data-preset]')) {
+    b.addEventListener('click', () => applyPreset(b.dataset.preset));
+  }
+
+  const mathsItems = [...document.querySelectorAll('.maths details')];
+  const syncMathsToggle = () => {
+    $('mathsToggle').textContent = mathsItems.every(d => d.open) ? 'Close all' : 'Open all';
+  };
+  $('mathsToggle').addEventListener('click', () => {
+    const open = !mathsItems.every(d => d.open);
+    for (const d of mathsItems) d.open = open;
+    syncMathsToggle();
+  });
+  for (const d of mathsItems) d.addEventListener('toggle', syncMathsToggle);
+
+  // ---------- main loop ----------
+
+  let last = performance.now(), lastReadout = 0;
+  function frame(now) {
+    const realDt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+    last = now;
+    if (sim.running) {
+      let remaining = realDt * sim.speed;
+      while (remaining > 1e-9) {
+        const dt = Math.min(STEP_DT, remaining);
+        step(dt);
+        remaining -= dt;
+      }
+    }
+    drawScene();
+    drawPlots();
+    if (now - lastReadout > 100) {
+      lastReadout = now;
+      updateReadout();
+    }
+    requestAnimationFrame(frame);
+  }
+
+  refit();
+  new ResizeObserver(refit).observe(document.querySelector('.stage'));
+  applyPreset('antiphase');
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) setRunning(false);
+  requestAnimationFrame(frame);
+})();
+</script>
+</body>
+</html>
