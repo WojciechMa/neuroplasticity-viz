@@ -755,14 +755,16 @@
   // ---------- plots: waves and strength over time ----------
 
   const PLOT_R = 985;
-  let PLOT_L = 80, PLOT_TOPS = [30, 172, 314], TICK_Y = 18;
+  let PLOT_L = 80, PLOT_TOPS = [30, 172, 314], TICK_Y = 18, TITLE_GAP = 9;
 
   // enlarged text on a narrow canvas needs a wider left margin and more room around each strip
   function layoutPlots() {
     const fs = Math.max(13, 11 / scale.plots), ascent = 0.75 * Math.max(15, 11 / scale.plots);
     pctx.font = font('plots', 13);
     PLOT_L = Math.max(80, Math.ceil(Math.max(pctx.measureText('firing').width, pctx.measureText('silent').width)) + 16);
-    const top = Math.max(30, 11 + ascent), gap = Math.max(42, 17 + ascent);
+    const f = 11 / scale.plots;
+    TITLE_GAP = Math.max(9, 0.3 * f);
+    const top = Math.max(30, TITLE_GAP + ascent + 4), gap = Math.max(42, TITLE_GAP + ascent + 0.6 * f);
     PLOT_TOPS = [top, top + 100 + gap, top + 200 + 2 * gap];
     TICK_Y = Math.max(18, 4 + 0.75 * fs);
     SIZE.plots[1] = Math.max(450, Math.ceil(PLOT_TOPS[2] + 110 + TICK_Y + 0.25 * fs + 4));
@@ -789,11 +791,11 @@
     ctx.textAlign = 'left';
     ctx.fillStyle = C.text;
     ctx.font = font('plots', 15, 600);
-    ctx.fillText('Firing rate: retina vs target ' + k, PLOT_L, top - 9);
+    ctx.fillText('Firing rate: retina vs target ' + k, PLOT_L, top - TITLE_GAP);
     ctx.textAlign = 'right';
     ctx.fillStyle = C.muted;
     ctx.font = font('plots', 13);
-    ctx.fillText('firing', PLOT_L - 8, top + 12);
+    ctx.fillText('firing', PLOT_L - 8, top + Math.max(12, 0.75 * Math.max(13, 11 / scale.plots)));
     ctx.fillText('silent', PLOT_L - 8, top + h);
     // shade runs of samples with the same sign as single blocks; per-sample rects look striped with noise
     let runT = null, runSign = 0;
@@ -830,7 +832,7 @@
     ctx.textAlign = 'left';
     ctx.fillStyle = C.text;
     ctx.font = font('plots', 15, 600);
-    ctx.fillText('Synaptic weight w', PLOT_L, top - 9);
+    ctx.fillText('Synaptic weight w', PLOT_L, top - TITLE_GAP);
 
     ctx.font = font('plots', 13);
     ctx.textAlign = 'right';
