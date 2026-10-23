@@ -94,6 +94,7 @@
   <h1>Neuroplasticity course: Activity-dependent synaptic refinement</h1>
   <p class="goal">The visualisation below was created as part of a Neuroplasticity course. It shows how the relative timing of pre- and postsynaptic firing decides which developing synapses are kept and which are pruned.</p>
   <p>During development, axons initially form redundant, diffuse connections. Spontaneous retinal waves then refine them: synapses whose pre- and postsynaptic neurons fire in phase are potentiated and stabilised, while those whose partners fire out of phase are depressed and pruned.</p>
+  <p>Here a population of retinal ganglion cells (R) projects to two target populations, A and B: groups of neurons in the thalamus (the lateral geniculate nucleus, LGN), which relay visual signals to the primary visual cortex (V1, not modelled). Real retinal waves are brief bursts that recur about once a minute; here the activity is a continuous oscillation and time is compressed.</p>
   <p>Choose a scenario, press <strong>Start retinal wave</strong>, and follow the synaptic weights. All parameters can be changed while the simulation runs.</p>
 </header>
 
@@ -193,7 +194,7 @@
       <table class="sym">
         <thead><tr><th scope="col">Symbol</th><th scope="col">Meaning</th><th scope="col">Set by</th></tr></thead>
         <tbody>
-          <tr><td><math><mi>X</mi></math></td><td>Population: R (retina), A or B (targets)</td><td>–</td></tr>
+          <tr><td><math><mi>X</mi></math></td><td>Population: R (retinal ganglion cells), A or B (target populations in the LGN)</td><td>–</td></tr>
           <tr><td><math><msub><mi>r</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></math></td><td>Normalised firing rate of population X at time t: 0 = silent, 1 = maximal</td><td>computed</td></tr>
           <tr><td><math><msub><mi>f</mi><mi>X</mi></msub></math></td><td>Oscillation frequency: cycles per second</td><td>Frequency slider (Hz)</td></tr>
           <tr><td><math><msub><mi>θ</mi><mi>X</mi></msub><mo stretchy="false">(</mo><mi>t</mi><mo stretchy="false">)</mo></math></td><td>Oscillation phase; 2π (= 360°) is one full cycle</td><td>grows with time</td></tr>
@@ -203,7 +204,7 @@
         </tbody>
       </table>
       <p>Each population's firing rate oscillates between silent and maximal, <math><msub><mi>f</mi><mi>X</mi></msub></math> times per second; the phase offset sets when the peaks occur. The result is clipped to stay between 0 and 1. A silent retina is simply <math><msub><mi>r</mi><mi>R</mi></msub><mo>=</mo><mn>0</mn></math>.</p>
-      <p>Real retinal waves are bursts of correlated firing separated by long silent intervals; the sinusoid is a simplification, and simulated time is compressed.</p>
+      <p>Real retinal waves are bursts of correlated firing lasting a few seconds, separated by silent intervals of about a minute, depending on species and age. The sinusoid is a simplification, and simulated time is compressed. Because the learning rule changes the weights only while the retina fires (equation 5), the silent intervals would only slow the process down: the weights would change in steps, once per wave.</p>
     </div>
   </details>
 
