@@ -58,6 +58,7 @@
   .seg button { padding: 4px 10px; font-size: 0.85rem; }
   label.check { display: inline-flex; align-items: center; gap: 6px; margin: 0; cursor: pointer; }
   label.check input { width: auto; margin: 0; accent-color: var(--text); }
+  .checks { display: flex; flex-wrap: wrap; gap: 6px 16px; }
   .scope { position: absolute; inset: 0; display: none; pointer-events: none; }
   .view[data-look="golgi"] .scope {
     display: block; mix-blend-mode: multiply;
@@ -164,7 +165,10 @@
           <button type="button" data-look="golgi" aria-pressed="false">Golgi stain</button>
           <button type="button" data-look="calcium" aria-pressed="false">Calcium imaging</button>
         </div>
-        <label class="check"><input type="checkbox" id="explain"> Explain the parts</label>
+        <div class="checks">
+          <label class="check"><input type="checkbox" id="activity" checked> Show action potentials and BDNF</label>
+          <label class="check"><input type="checkbox" id="explain"> Explain the parts</label>
+        </div>
       </div>
       <p class="note" id="lookNote"></p>
       <div class="legend" id="legend">
@@ -814,7 +818,7 @@ function createView() {
       S.mat.emissive.copy(tint).multiplyScalar(0.6 * a);
     }
     S.boutonMat.color.copy(S.mat.color);
-    S.boutonMat.emissive.copy(S.mat.emissive).lerp(white, look === 'model' ? 0.7 * S.flash : 0);
+    S.boutonMat.emissive.copy(S.mat.emissive).lerp(white, showActivity ? 0.7 * S.flash : 0);
   }
 
   // action potentials (display only): fired at SPIKES_PER_S × the firing rate
@@ -826,7 +830,12 @@ function createView() {
   spikeMesh.frustumCulled = false;
   spikeMesh.count = 0;
   scene.add(spikeMesh);
-  const spikeColor = { R: new THREE.Color('#ffe2b0'), A: new THREE.Color('#cde9ff'), B: new THREE.Color('#f0dcff') };
+  const same = hex => { const c = new THREE.Color(hex); return { R: c, A: c, B: c }; };
+  const spikeColors = {
+    model: { R: new THREE.Color('#ffe2b0'), A: new THREE.Color('#cde9ff'), B: new THREE.Color('#f0dcff') },
+    golgi: same('#fff3cf'),
+    calcium: same('#ffffff'),
+  };
   let spikes = [];
 
   function updateSpikes(dt) {
@@ -841,7 +850,7 @@ function createView() {
     const show = (p, key) => {
       if (n === MAX_SPIKES) return;
       spikeMesh.setMatrixAt(n, m.makeScale(grow, grow, grow).setPosition(p));
-      spikeMesh.setColorAt(n++, spikeColor[key]);
+      spikeMesh.setColorAt(n++, spikeColors[look][key]);
     };
     spikes = spikes.filter(sp => {
       const before = sp.d - trunkLen;
@@ -875,14 +884,15 @@ function createView() {
     if (spikeMesh.instanceColor) spikeMesh.instanceColor.needsUpdate = true;
   }
 
-  const MAX_DOTS = 96, bdnf = new THREE.Color(C.bdnf);
+  const MAX_DOTS = 96;
+  const bdnfColors = { model: new THREE.Color(C.bdnf), golgi: new THREE.Color('#2f8f3a'), calcium: new THREE.Color('#ff4fd8') };
   const dots = new THREE.InstancedMesh(
     new THREE.SphereGeometry(0.06, 12, 8),
     new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
     MAX_DOTS);
   dots.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
   dots.frustumCulled = false;
-  for (let i = 0; i < MAX_DOTS; i++) dots.setColorAt(i, bdnf);
+  for (let i = 0; i < MAX_DOTS; i++) dots.setColorAt(i, bdnfColors.model);
   dots.count = 0;
   scene.add(dots);
 
@@ -893,7 +903,7 @@ function createView() {
       const p = particles[i];
       syn[p.k].bdnfPath.getPoint(p.s, v);
       dots.setMatrixAt(i, m.makeScale(grow, grow, grow).setPosition(v));
-      dots.setColorAt(i, tmp.copy(bdnf).multiplyScalar(0.25 + 0.75 * p.s));
+      dots.setColorAt(i, tmp.copy(bdnfColors[look]).multiplyScalar(0.25 + 0.75 * p.s));
     }
     dots.count = n;
     dots.instanceMatrix.needsUpdate = true;
@@ -1036,11 +1046,11 @@ function createView() {
     },
     golgi: {
       clear: '#d9b46c',
-      note: 'Golgi stain. In 1873 Camillo Golgi found a silver chromate reaction that turns a few neurons, chosen at random, completely black; Santiago Ramón y Cajal used it for his detailed drawings of neurons. The stain shows shape only, in fixed tissue: firing is invisible, but the axon branches still thicken or retract as the synapses change.',
+      note: 'Golgi stain. In 1873 Camillo Golgi found a silver chromate reaction that turns a few neurons, chosen at random, completely black; Santiago Ramón y Cajal used it for his detailed drawings of neurons. The stain itself shows only shape, in fixed tissue, so the activity is drawn on top: light pulses are action potentials and green dots are BDNF. Untick “Show action potentials and BDNF” to see the stain alone. Axon-branch thickness still shows the synaptic weight.',
     },
     calcium: {
       clear: '#010503',
-      note: 'Calcium imaging. Neurons carry a fluorescent indicator that glows when calcium enters during firing; this is a common way to record retinal waves. The glow rises and fades more slowly than the firing itself. Axon-branch thickness still shows the synaptic weight.',
+      note: 'Calcium imaging. Neurons carry a fluorescent indicator that glows when calcium enters during firing; this is a common way to record retinal waves. The glow rises and fades more slowly than the firing itself. Single action potentials are too fast to see this way, so they are drawn on top as white pulses, and BDNF is shown in magenta, like a second fluorescent label. Untick “Show action potentials and BDNF” to see only what the indicator shows. Axon-branch thickness still shows the synaptic weight.',
     },
   };
   const golgiShell = tissue('#7a5527', 0.12), calciumShell = tissue('#2f7a4b', 0.14);
@@ -1084,7 +1094,8 @@ function createView() {
     styleNeuron(targets.A.mat, new THREE.Color(C.a));
     styleNeuron(targets.B.mat, new THREE.Color(C.b));
     for (const k of ['A', 'B']) syn[k].stubMat.color.copy(name === 'model' ? mutedColor : name === 'golgi' ? stain : caDim);
-    spikeMesh.visible = dots.visible = name === 'model';
+    // pulses and BDNF glow on the dark backgrounds; on the light Golgi background they are painted normally
+    spikeMesh.material.blending = dots.material.blending = name === 'golgi' ? THREE.NormalBlending : THREE.AdditiveBlending;
     rgcDots.visible = dotGlowPoints.visible = name !== 'golgi';
     for (const s of [rgcGlow, targets.A.glow, targets.B.glow]) {
       s.visible = name !== 'golgi';
@@ -1110,13 +1121,17 @@ function createView() {
     soma: ['Cell body (soma)', 'Contains the nucleus and sums the inputs. Its brightness shows the firing rate of the target population, which in the model follows the target\'s own frequency and phase sliders.', [targets.A.somaMesh, targets.B.somaMesh]],
     axon: ['Axon of a target neuron', 'The output side. It starts at the axon hillock, the bulge of the cell body, and carries the target neuron\'s own action potentials on to the next brain area.', [targets.A.axonMesh, targets.B.axonMesh]],
     myelin: ['Myelin sheath', 'Insulating segments wrapped around the axon by glial cells. Action potentials jump between the gaps (nodes of Ranvier), which speeds up conduction.', [myelinMesh]],
-    spikes: ['Action potentials', 'Brief electrical pulses travelling along the axons, shown in model colours. They are drawn more often the higher the firing rate; the model itself works with firing rates.', []],
-    bdnf: ['BDNF', 'Brain-derived neurotrophic factor, shown in model colours. It is released at the synapse while pre- and postsynaptic firing coincide, travels back along the axon to the ganglion cell, and helps stabilise the synapse.', []],
+    spikes: ['Action potentials', 'Brief electrical pulses travelling along the axons. They are drawn more often the higher the firing rate; the model itself works with firing rates.', []],
+    bdnf: ['BDNF', 'Brain-derived neurotrophic factor. It is released at the synapse while pre- and postsynaptic firing coincide, travels back along the axon to the ganglion cell, and helps stabilise the synapse.', []],
   };
   const pickables = Object.entries(PARTS).flatMap(([key, part]) => part[2].map(o => { o.userData.part = key; return o; }));
   sclera.userData.shell = nerveSheath.userData.shell = true;
   const raycaster = new THREE.Raycaster(), ndc = new THREE.Vector2(), tip = $('tip'), chips = $('chips');
-  let explainOn = false, selected = null, hovered = null, down = null;
+  let explainOn = false, selected = null, hovered = null, down = null, showActivity = true;
+  $('activity').addEventListener('change', e => {
+    showActivity = e.target.checked;
+    spikeMesh.visible = dots.visible = showActivity;
+  });
 
   const isShown = o => o.visible && (!o.parent || o.parent.visible);
   function pick(e) {
