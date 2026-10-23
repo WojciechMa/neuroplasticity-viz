@@ -1,0 +1,988 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<meta name="description" content="Three-dimensional interactive model of activity-dependent synaptic refinement: correlated spontaneous activity decides which developing synapses are stabilised and which are pruned.">
+<title>Neuroplasticity course: Activity-dependent synaptic refinement in 3D</title>
+<style>
+  :root {
+    --bg: #0f1420;
+    --panel: #171e2e;
+    --line: #2a3348;
+    --text: #e6e9ef;
+    --muted: #9aa4b5;
+    --retina: #f2a541;
+    --a: #4ea8de;
+    --b: #c77dff;
+    --match: #2ec4b6;
+    --mismatch: #ff6b6b;
+    --bdnf: #9be564;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0 auto; max-width: 1400px; color: var(--text);
+    font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  a { color: var(--text); }
+  header { padding: 18px 20px 0; }
+  h1 { margin: 0 0 6px; font-size: 1.4rem; }
+  header p { margin: 0 0 4px; color: var(--muted); }
+  header strong { color: var(--text); }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 16px; padding: 14px 20px; }
+  @media (max-width: 960px) { main { grid-template-columns: 1fr; } }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; }
+  .stage { display: grid; gap: 16px; align-content: start; min-width: 0; }
+  .view { position: relative; height: clamp(220px, 50vw, 540px); overflow: hidden; }
+  .view canvas { display: block; width: 100%; height: 100%; }
+  .fallback {
+    position: absolute; inset: 0; display: grid; place-items: center;
+    margin: 0; padding: 20px; text-align: center; color: var(--muted);
+  }
+  .lab {
+    position: absolute; left: 0; top: 0; pointer-events: none; white-space: nowrap;
+    font-size: 0.85rem; font-weight: 600; line-height: 1.3;
+    text-shadow: 0 0 3px var(--panel), 0 0 6px var(--panel);
+  }
+  .lab span { display: block; font-weight: 400; color: var(--text); }
+  .lab span.pruned { color: var(--mismatch); }
+  .lab.muted { color: var(--muted); font-weight: 400; }
+  #labSynA, #labSynB { text-align: right; }
+  @media (max-width: 600px) { .lab { font-size: 0.75rem; } }
+  .view-bar { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 6px 12px; margin-top: 8px; }
+  .hint { color: var(--muted); font-size: 0.85rem; }
+  .legend { display: flex; flex-wrap: wrap; gap: 4px 16px; margin: 8px 2px 0; color: var(--muted); font-size: 0.85rem; }
+  .legend .dot::before, .legend .swatch::before {
+    content: ""; display: inline-block; width: 10px; height: 10px; margin-right: 6px;
+    vertical-align: -1px; background: var(--c);
+  }
+  .legend .dot::before { border-radius: 50%; }
+  .legend .swatch::before { border-radius: 2px; }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
+  th, td { padding: 5px 8px; text-align: left; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .readout th[scope="row"] { color: var(--muted); font-weight: 400; }
+  .ca { color: var(--a); }
+  .cb { color: var(--b); }
+  .cr { color: var(--retina); }
+  .note { margin: 8px 2px 0; color: var(--muted); font-size: 0.9rem; }
+  .controls { display: grid; gap: 12px; align-content: start; }
+  .buttons, .presets { display: flex; flex-wrap: wrap; gap: 8px; }
+  button {
+    font: inherit; font-size: 0.9rem; color: var(--text); background: #243049;
+    border: 1px solid #34405c; border-radius: 7px; padding: 6px 12px; cursor: pointer;
+  }
+  button:hover { background: #2c3a58; }
+  button:focus-visible, input:focus-visible, a:focus-visible { outline: 2px solid var(--text); outline-offset: 2px; }
+  button.primary { background: #6b4512; border-color: var(--retina); }
+  button.primary:hover { background: #82561a; }
+  button[data-preset][aria-pressed="true"] { background: #34405c; border-color: var(--text); }
+  .msg { margin: 0; min-height: 3em; color: var(--muted); font-size: 0.9rem; }
+  fieldset { border: 1px solid var(--line); border-radius: 8px; margin: 0; padding: 6px 10px 10px; }
+  legend { padding: 0 4px; font-weight: 600; }
+  label { display: grid; grid-template-columns: 1fr auto; gap: 0 8px; margin-top: 6px; font-size: 0.9rem; }
+  label input { grid-column: 1 / -1; width: 100%; margin: 4px 0 0; }
+  output { color: var(--muted); font-variant-numeric: tabular-nums; }
+  .g-r legend { color: var(--retina); }
+  .g-r input { accent-color: var(--retina); }
+  .g-a legend { color: var(--a); }
+  .g-a input { accent-color: var(--a); }
+  .g-b legend { color: var(--b); }
+  .g-b input { accent-color: var(--b); }
+  footer { padding: 0 20px 24px; }
+  footer a { font-weight: 600; }
+</style>
+<script type="importmap">
+{
+  "imports": {
+    "three": "../../lib/three/three.module.js",
+    "three/addons/": "../../lib/three/addons/"
+  }
+}
+</script>
+</head>
+<body>
+<header>
+  <h1>Neuroplasticity course: Activity-dependent synaptic refinement in 3D</h1>
+  <p>The same model as on the <a href="../../index.html">2D page</a>, drawn as neurons. Spontaneous waves sweep across the ganglion cells of the retina, at the back of the eye. One retinal ganglion cell sends its axon through the optic nerve; the axon branches and makes one synapse onto a neuron of target A and one onto a neuron of target B, each standing for its population.</p>
+  <p>Brightness shows the firing rate, and glowing pulses travelling along the axons are action potentials, drawn more often the higher the rate. The thickness of each axon branch and the size of its synaptic bouton show the synaptic weight. Choose a scenario, press <strong>Start retinal wave</strong>, and rotate the view. The firing-rate plots and the maths are on the 2D page.</p>
+</header>
+
+<main>
+  <section class="stage" aria-label="Simulation">
+    <div class="card">
+      <div class="view" id="view">
+        <p class="fallback" id="fallback">Starting the 3D view… If this message stays, your browser cannot display it (it needs WebGL). The 2D page works in every browser.</p>
+        <div id="labels" aria-hidden="true" hidden>
+          <span class="lab ca" id="labA">Target A</span>
+          <span class="lab cb" id="labB">Target B</span>
+          <span class="lab cr" id="labR">Retina: silent</span>
+          <span class="lab muted" id="labN">Optic nerve</span>
+          <span class="lab ca" id="labSynA">Synapse R→A<span id="stSynA">w = 0.50</span></span>
+          <span class="lab cb" id="labSynB">Synapse R→B<span id="stSynB">w = 0.50</span></span>
+        </div>
+      </div>
+      <div class="view-bar">
+        <span class="hint" id="hint">Drag to rotate; hold Ctrl and scroll to zoom.</span>
+        <button id="resetView" type="button">Reset view</button>
+      </div>
+      <div class="legend">
+        <span class="dot" style="--c: var(--retina)">Retina (presynaptic)</span>
+        <span class="dot" style="--c: var(--a)">Target A (postsynaptic)</span>
+        <span class="dot" style="--c: var(--b)">Target B (postsynaptic)</span>
+        <span class="dot" style="--c: var(--bdnf)">BDNF: coincident pre- and postsynaptic firing</span>
+        <span class="swatch" style="--c: var(--match)">potentiation</span>
+        <span class="swatch" style="--c: var(--mismatch)">depression</span>
+        <span>Pulses = action potentials; branch thickness and bouton size = synaptic weight</span>
+      </div>
+    </div>
+    <div class="card">
+      <table class="readout">
+        <thead>
+          <tr><th scope="col"></th><th scope="col" class="ca">Synapse R→A</th><th scope="col" class="cb">Synapse R→B</th></tr>
+        </thead>
+        <tbody>
+          <tr><th scope="row">Phase difference to the retina (Δφ)</th><td id="gapA"></td><td id="gapB"></td></tr>
+          <tr><th scope="row">Mean Hebbian drive, last 6 s</th><td id="avgA"></td><td id="avgB"></td></tr>
+          <tr><th scope="row">Expected mean drive: ½ cos Δφ</th><td id="expA"></td><td id="expB"></td></tr>
+          <tr><th scope="row">Synaptic weight w</th><td id="wA"></td><td id="wB"></td></tr>
+          <tr><th scope="row">Status</th><td id="stA"></td><td id="stB"></td></tr>
+        </tbody>
+      </table>
+      <p class="note" id="gapAB"></p>
+    </div>
+  </section>
+
+  <aside class="card controls" aria-label="Controls">
+    <div class="buttons">
+      <button id="retina" class="primary" type="button" aria-pressed="false">Start retinal wave</button>
+      <button id="play" type="button">Pause</button>
+      <button id="restart" type="button" title="Restart the run with the current settings">Restart</button>
+    </div>
+    <p id="msg" class="msg" aria-live="polite"></p>
+    <fieldset>
+      <legend>Scenarios</legend>
+      <div class="presets">
+        <button type="button" data-preset="antiphase">Targets in anti-phase</button>
+        <button type="button" data-preset="inphase">Targets in phase</button>
+        <button type="button" data-preset="quadrature">Quadrature (90°)</button>
+        <button type="button" data-preset="drift">Frequency mismatch</button>
+      </div>
+    </fieldset>
+    <fieldset class="g-r">
+      <legend>Retina (presynaptic)</legend>
+      <label>Frequency <output id="fROut"></output><input id="fR" type="range" min="0.1" max="1.5" step="0.05"></label>
+      <label>Phase <output id="phROut"></output><input id="phR" type="range" min="0" max="355" step="5"></label>
+    </fieldset>
+    <fieldset class="g-a">
+      <legend>Target A (postsynaptic)</legend>
+      <label>Frequency <output id="fAOut"></output><input id="fA" type="range" min="0.1" max="1.5" step="0.05"></label>
+      <label>Phase <output id="phAOut"></output><input id="phA" type="range" min="0" max="355" step="5"></label>
+    </fieldset>
+    <fieldset class="g-b">
+      <legend>Target B (postsynaptic)</legend>
+      <label>Frequency <output id="fBOut"></output><input id="fB" type="range" min="0.1" max="1.5" step="0.05"></label>
+      <label>Phase <output id="phBOut"></output><input id="phB" type="range" min="0" max="355" step="5"></label>
+    </fieldset>
+    <fieldset>
+      <legend>Simulation</legend>
+      <label>Learning rate <output id="etaOut"></output><input id="eta" type="range" min="0" max="0.5" step="0.01"></label>
+      <label>Noise <output id="noiseOut"></output><input id="noise" type="range" min="0" max="0.3" step="0.01"></label>
+      <label>Simulation speed <output id="speedOut"></output><input id="speed" type="range" min="0.25" max="3" step="0.25"></label>
+    </fieldset>
+  </aside>
+</main>
+
+<footer><a href="../../index.html">← 2D page: firing-rate plots and the maths explained</a></footer>
+<noscript><p>This page needs JavaScript.</p></noscript>
+
+<script>
+  if (location.protocol === 'file:') {
+    document.getElementById('fallback').textContent = 'The 3D view must be opened through a web server: browsers block JavaScript modules in files opened from disk. Use the live page, or start a local server (see the README).';
+  }
+</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const DEG = Math.PI / 180;
+const W0 = 0.5, PRUNE_AT = 0.05, STABLE_AT = 0.98;
+const TAU_NOISE = 0.25, AVG_WINDOW = 6;
+const STEP_DT = 1 / 240, SAMPLE_DT = 1 / 60;
+const TINT_FROM = 0.3;
+// display only: seconds a BDNF particle takes to travel back to the ganglion cell body
+const BDNF_TRAVEL = 2.5;
+
+const css = getComputedStyle(document.documentElement);
+const C = {};
+for (const k of ['panel', 'retina', 'a', 'b', 'match', 'mismatch', 'bdnf', 'text', 'muted', 'line']) {
+  C[k] = css.getPropertyValue('--' + k).trim();
+}
+
+// f (Hz) and ph (degrees) are listed as [retina, A, B]
+const PRESETS = {
+  antiphase: {
+    f: [0.5, 0.5, 0.5], ph: [0, 0, 180], retinaOn: false,
+    msg: 'Targets A and B fire in anti-phase. Start the retinal wave to see which synapse is stabilised and which is pruned.',
+  },
+  inphase: {
+    f: [0.5, 0.5, 0.5], ph: [0, 0, 0], retinaOn: true,
+    msg: 'Targets A and B fire in phase, so the retina is in phase with both: both synapses are potentiated and there is no selection.',
+  },
+  quadrature: {
+    f: [0.5, 0.5, 0.5], ph: [90, 0, 180], retinaOn: true,
+    msg: 'The retina is in quadrature (90°) with both targets: the mean drive on both synapses is zero.',
+  },
+  drift: {
+    f: [0.6, 0.5, 0.5], ph: [0, 0, 180], retinaOn: true,
+    msg: 'The retina fires at a different frequency, so the phase difference drifts and potentiation alternates with depression: no net change.',
+  },
+};
+
+const groups = {
+  R: { f: 0.5, ph: 0, theta: 0, xi: 0, rate: 0 },
+  A: { f: 0.5, ph: 0, theta: 0, xi: 0, rate: 0 },
+  B: { f: 0.5, ph: 180, theta: 0, xi: 0, rate: 0 },
+};
+const links = { A: { w: W0, pruned: false, drive: 0 }, B: { w: W0, pruned: false, drive: 0 } };
+const sim = {
+  t: 0, running: true, retinaOn: false, preset: 'antiphase',
+  eta: 0.1, noise: 0.05, speed: 1, sampleClock: 0,
+};
+let samples = [], particles = [];
+
+const $ = id => document.getElementById(id);
+const clamp01 = x => Math.min(1, Math.max(0, x));
+
+function gauss() {
+  let u = 0;
+  while (u === 0) u = Math.random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * Math.random());
+}
+
+// firing rate 0..1; lag = phase delay of a neuron relative to the centre neuron (propagating wave)
+function rateOf(g, lag) {
+  return clamp01(0.5 + 0.5 * Math.sin(g.theta + g.ph * DEG - lag) + sim.noise * g.xi);
+}
+
+function gapDeg(from, to) {
+  const d = (groups[to].theta + groups[to].ph * DEG - groups[from].theta - groups[from].ph * DEG) / DEG;
+  return Math.abs((((d % 360) + 540) % 360) - 180);
+}
+
+const sameFreq = (a, b) => Math.abs(groups[a].f - groups[b].f) < 1e-9;
+
+// ---------- simulation: the same model as the 2D page ----------
+
+function step(dt) {
+  sim.t += dt;
+  for (const g of Object.values(groups)) {
+    g.theta = (g.theta + 2 * Math.PI * g.f * dt) % (2 * Math.PI);
+    g.xi += -g.xi * dt / TAU_NOISE + Math.sqrt(2 * dt / TAU_NOISE) * gauss();
+  }
+  const rR = sim.retinaOn ? rateOf(groups.R, 0) : 0;
+  groups.R.rate = rR;
+  for (const k of ['A', 'B']) {
+    const g = groups[k], L = links[k];
+    g.rate = rateOf(g, 0);
+    // coincident firing: potentiation (BDNF); presynaptic firing alone: depression; retina silent: no change
+    L.drive = 4 * rR * (g.rate - 0.5);
+    if (L.pruned) continue;
+    L.w = Math.min(1, L.w + sim.eta * L.drive * dt);
+    if (L.w < PRUNE_AT) {
+      L.w = 0;
+      L.pruned = true;
+    } else if (L.drive > 0.5 && Math.random() < 7 * L.drive * dt) {
+      particles.push({ k, s: 1 });
+    }
+  }
+  for (const p of particles) p.s -= dt / BDNF_TRAVEL;
+  particles = particles.filter(p => p.s > 0 && !links[p.k].pruned);
+
+  sim.sampleClock += dt;
+  if (sim.sampleClock >= SAMPLE_DT) {
+    sim.sampleClock -= SAMPLE_DT;
+    samples.push({ t: sim.t, on: sim.retinaOn, da: links.A.drive, db: links.B.drive });
+    while (samples[0].t < sim.t - AVG_WINDOW) samples.shift();
+  }
+}
+
+function meanDrive(k) {
+  let sum = 0, n = 0;
+  for (const s of samples) {
+    if (s.on && s.t >= sim.t - AVG_WINDOW) {
+      sum += k === 'A' ? s.da : s.db;
+      n++;
+    }
+  }
+  return n ? sum / n : 0;
+}
+
+// ---------- readout table ----------
+
+const gapWord = g => (g <= 30 ? 'in phase' : g >= 150 ? 'anti-phase' : Math.abs(g - 90) <= 15 ? 'quadrature' : 'out of phase');
+const signed = x => (Math.abs(x) < 0.005 ? '0.00' : (x > 0 ? '+' : '−') + Math.abs(x).toFixed(2));
+
+function updateReadout() {
+  for (const k of ['A', 'B']) {
+    const L = links[k], gap = gapDeg('R', k), same = sameFreq('R', k), avg = meanDrive(k);
+    let gapText, expText, status;
+    if (!sim.retinaOn) {
+      gapText = '– (retina silent)';
+      expText = '0';
+    } else if (!same) {
+      gapText = `drifting (now ${gap.toFixed(0)}°)`;
+      expText = '0 on average';
+    } else {
+      gapText = `${gap.toFixed(0)}° (${gapWord(gap)})`;
+      expText = signed(0.5 * Math.cos(gap * DEG));
+    }
+    if (L.pruned) status = 'pruned';
+    else if (L.w >= STABLE_AT) status = 'stabilised';
+    else if (!sim.retinaOn) status = 'waiting for retinal activity';
+    else if (!same) status = 'phase drift: no net change';
+    else if (avg > 0.05) status = 'potentiating';
+    else if (avg < -0.05) status = 'depressing';
+    else status = 'no net change';
+    $('gap' + k).textContent = gapText;
+    $('avg' + k).textContent = signed(avg);
+    $('exp' + k).textContent = expText;
+    $('w' + k).textContent = L.pruned ? '0 (pruned)' : L.w.toFixed(2);
+    $('st' + k).textContent = status;
+  }
+  const ab = gapDeg('A', 'B');
+  $('gapAB').textContent = sameFreq('A', 'B')
+    ? `Phase difference between targets A and B: ${ab.toFixed(0)}° (${gapWord(ab)}).`
+    : 'Targets A and B have different frequencies, so their phase difference drifts.';
+}
+
+// ---------- controls ----------
+
+function setRunning(on) {
+  sim.running = on;
+  $('play').textContent = on ? 'Pause' : 'Play';
+}
+
+function setRetina(on, byUser) {
+  sim.retinaOn = on;
+  $('retina').textContent = on ? 'Stop retinal wave' : 'Start retinal wave';
+  $('retina').setAttribute('aria-pressed', String(on));
+  if (!byUser) return;
+  $('msg').textContent = on
+    ? 'Retinal wave started. The synapse onto the in-phase target is potentiated; the one onto the out-of-phase target is depressed and pruned.'
+    : 'Retina silent: synaptic weights no longer change.';
+}
+
+function restart() {
+  Object.assign(sim, { t: 0, sampleClock: 0 });
+  for (const g of Object.values(groups)) Object.assign(g, { theta: 0, xi: 0, rate: 0 });
+  for (const L of Object.values(links)) Object.assign(L, { w: W0, pruned: false, drive: 0 });
+  samples = [];
+  particles = [];
+  setRetina(PRESETS[sim.preset].retinaOn, false);
+  setRunning(true);
+}
+
+const SLIDERS = [
+  ['fR', groups.R, 'f', v => v.toFixed(2) + ' Hz'],
+  ['phR', groups.R, 'ph', v => v + '°'],
+  ['fA', groups.A, 'f', v => v.toFixed(2) + ' Hz'],
+  ['phA', groups.A, 'ph', v => v + '°'],
+  ['fB', groups.B, 'f', v => v.toFixed(2) + ' Hz'],
+  ['phB', groups.B, 'ph', v => v + '°'],
+  ['eta', sim, 'eta', v => v.toFixed(2)],
+  ['noise', sim, 'noise', v => v.toFixed(2)],
+  ['speed', sim, 'speed', v => v + '×'],
+];
+
+function syncSliders() {
+  for (const [id, obj, prop, fmt] of SLIDERS) {
+    $(id).value = obj[prop];
+    $(id + 'Out').textContent = fmt(obj[prop]);
+  }
+}
+
+function applyPreset(key) {
+  const p = PRESETS[key];
+  sim.preset = key;
+  ['R', 'A', 'B'].forEach((g, i) => {
+    groups[g].f = p.f[i];
+    groups[g].ph = p.ph[i];
+  });
+  syncSliders();
+  restart();
+  $('msg').textContent = p.msg;
+  for (const b of document.querySelectorAll('[data-preset]')) {
+    b.setAttribute('aria-pressed', String(b.dataset.preset === key));
+  }
+}
+
+for (const [id, obj, prop, fmt] of SLIDERS) {
+  $(id).addEventListener('input', e => {
+    obj[prop] = Number(e.target.value);
+    $(id + 'Out').textContent = fmt(obj[prop]);
+  });
+}
+$('retina').addEventListener('click', () => setRetina(!sim.retinaOn, true));
+$('play').addEventListener('click', () => setRunning(!sim.running));
+$('restart').addEventListener('click', restart);
+for (const b of document.querySelectorAll('[data-preset]')) {
+  b.addEventListener('click', () => applyPreset(b.dataset.preset));
+}
+
+// ---------- 3D view ----------
+
+// the eye looks towards -x; its retina lines the back (+x), where the optic nerve leaves
+const EYE = new THREE.Vector3(-3.5, 0, 0);
+const BRANCH = new THREE.Vector3(0.5, 0, 0);
+const SOMA_R = 0.2, SPIKE_SPEED = 8, SPIKES_PER_S = 10, MAX_SPIKES = 240;
+const TARGETS = {
+  A: { at: new THREE.Vector3(2.7, 1.25, -0.1), color: C.a, seed: 11, side: 1 },
+  B: { at: new THREE.Vector3(2.7, -1.25, 0.1), color: C.b, seed: 23, side: -1 },
+};
+
+// seeded random numbers, so the neurons have the same shape on every visit
+function mulberry32(seed) {
+  return () => {
+    seed = (seed + 0x6D2B79F5) | 0;
+    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const jitter = (rand, s) => new THREE.Vector3(rand() - 0.5, rand() - 0.5, rand() - 0.5).multiplyScalar(2 * s);
+
+// TubeGeometry whose radius follows radius(u), u = 0 … 1 along the curve
+function taperedTube(curve, radius, segments, radial = 8) {
+  const geo = new THREE.TubeGeometry(curve, segments, 1, radial, false);
+  const pos = geo.attributes.position, c = new THREE.Vector3(), q = new THREE.Vector3();
+  for (let i = 0; i <= segments; i++) {
+    curve.getPointAt(i / segments, c);
+    const r = radius(i / segments);
+    for (let j = 0; j <= radial; j++) {
+      const idx = i * (radial + 1) + j;
+      q.fromBufferAttribute(pos, idx).sub(c).multiplyScalar(r).add(c);
+      pos.setXYZ(idx, q.x, q.y, q.z);
+    }
+  }
+  return geo;
+}
+
+// one geometry per material keeps the number of draw calls low
+function merge(geos) {
+  let nv = 0, ni = 0;
+  for (const g of geos) {
+    nv += g.attributes.position.count;
+    ni += g.index.count;
+  }
+  const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3), index = new Uint32Array(ni);
+  let ov = 0, oi = 0;
+  for (const g of geos) {
+    pos.set(g.attributes.position.array, ov * 3);
+    nor.set(g.attributes.normal.array, ov * 3);
+    for (const i of g.index.array) index[oi++] = i + ov;
+    ov += g.attributes.position.count;
+    g.dispose();
+  }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setIndex(new THREE.BufferAttribute(index, 1));
+  return out;
+}
+
+// a dendritic segment that splits into two daughters until depth runs out; returns the first segment
+function growBranch(rand, from, dir, len, r0, depth, wander, out) {
+  const d = dir.clone().normalize(), p = from.clone(), pts = [p.clone()];
+  for (let i = 0; i < 3; i++) {
+    d.add(jitter(rand, wander)).normalize();
+    pts.push(p.addScaledVector(d, len / 3).clone());
+  }
+  const curve = new THREE.CatmullRomCurve3(pts), r1 = depth ? r0 * 0.68 : 0.006;
+  out.push(taperedTube(curve, u => r0 + (r1 - r0) * u, 16, 7));
+  for (let k = 0; depth && k < 2; k++) {
+    growBranch(rand, pts[3], curve.getTangentAt(1).add(jitter(rand, 0.7)), len * 0.7, r1, depth - 1, 0.3, out);
+  }
+  return { curve, r0, r1 };
+}
+
+// postsynaptic neuron: uneven soma, branching dendrites, and a myelinated axon leaving towards +x
+function buildTarget(T) {
+  const rand = mulberry32(T.seed), s = T.side, cell = [], myelin = [];
+  const soma = new THREE.SphereGeometry(SOMA_R, 28, 20), sp = soma.attributes.position, n = new THREE.Vector3();
+  for (let i = 0; i < sp.count; i++) {
+    n.fromBufferAttribute(sp, i).normalize();
+    // the axon hillock bulges towards +x
+    const r = SOMA_R * (1 + 0.07 * Math.sin(5 * n.x + T.seed) * Math.sin(4 * n.y + 1) * Math.cos(3 * n.z))
+      * (1 + 0.5 * Math.max(0, n.x) ** 4);
+    sp.setXYZ(i, n.x * r, n.y * r, n.z * r);
+  }
+  cell.push(soma);
+  const primary = (x, y, z, wander) => {
+    const dir = new THREE.Vector3(x, y * s, z * s).normalize();
+    return growBranch(rand, dir.clone().multiplyScalar(SOMA_R * 0.8), dir, 0.65, 0.055, 2, wander, cell);
+  };
+  // the receiving dendrite reaches into the space between the two targets
+  const recv = primary(-0.55, -0.8, 0.2, 0.08);
+  for (const d of [[-0.9, 0.35, 0.2], [-0.3, 0.9, -0.3], [0.25, 0.95, 0.25], [-0.5, 0.2, -0.85], [-0.45, -0.1, 0.9], [0.3, -0.75, -0.55]]) {
+    primary(...d, 0.25);
+  }
+  const axonPts = [[SOMA_R * 1.3, 0, 0], [0.6, -0.05, 0.04], [1.1, 0.05, -0.05], [1.6, -0.03, 0.04], [2.05, 0.02, 0]]
+    .map(([x, y, z]) => new THREE.Vector3(x, y, z));
+  const axon = new THREE.CatmullRomCurve3(axonPts);
+  cell.push(taperedTube(axon, u => 0.02 + 0.03 * Math.max(0, 1 - u / 0.12) - 0.012 * Math.max(0, (u - 0.94) / 0.06), 60));
+  for (const [u0, u1] of [[0.2, 0.4], [0.45, 0.65], [0.7, 0.9]]) {
+    const sheath = new THREE.CatmullRomCurve3(Array.from({ length: 8 }, (_, i) => axon.getPointAt(u0 + (u1 - u0) * i / 7)));
+    myelin.push(taperedTube(sheath, u => 0.05 * Math.sqrt(Math.max(0, 1 - (2 * u - 1) ** 8)), 24, 12));
+  }
+  for (const g of [...cell, ...myelin]) g.translate(T.at.x, T.at.y, T.at.z);
+  // the synaptic bouton sits beside the receiving dendrite, on the side facing the incoming axon
+  const u = 0.7, onDendrite = recv.curve.getPointAt(u).add(T.at), tangent = recv.curve.getTangentAt(u);
+  const toAxon = BRANCH.clone().sub(onDendrite);
+  const approach = toAxon.addScaledVector(tangent, -toAxon.dot(tangent)).normalize();
+  return {
+    cell: merge(cell),
+    myelin,
+    axon: new THREE.CatmullRomCurve3(axonPts.map(p => p.clone().add(T.at))),
+    bouton: onDendrite.addScaledVector(approach, recv.r0 + (recv.r1 - recv.r0) * u + 0.13),
+    approach,
+  };
+}
+
+function glowTexture() {
+  const c = document.createElement('canvas');
+  c.width = c.height = 64;
+  const g = c.getContext('2d'), grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  grad.addColorStop(0, 'rgba(255, 255, 255, 1)');
+  grad.addColorStop(0.3, 'rgba(255, 255, 255, 0.35)');
+  grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+  g.fillStyle = grad;
+  g.fillRect(0, 0, 64, 64);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+
+function createView() {
+  const box = $('view');
+  let renderer;
+  try {
+    renderer = new THREE.WebGLRenderer({ antialias: true });
+  } catch {
+    return null;
+  }
+  $('fallback').remove();
+  $('labels').hidden = false;
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  renderer.setClearColor(C.panel);
+  const canvas = renderer.domElement;
+  canvas.setAttribute('role', 'img');
+  canvas.setAttribute('aria-label', 'Three-dimensional model: in the eye, a retinal ganglion cell sends its axon through the optic nerve; the axon branches to a neuron of target A and a neuron of target B. Brightness and travelling pulses show firing; branch thickness and bouton size show synaptic weight.');
+  box.prepend(canvas);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
+  const controls = new OrbitControls(camera, canvas);
+  controls.enableDamping = true;
+  controls.enablePan = false;
+  controls.minDistance = 2.5;
+  controls.maxPolarAngle = Math.PI * 0.85;
+  // vertical swipes keep scrolling the page; sideways drags rotate the view
+  canvas.style.touchAction = 'pan-y';
+  // plain scrolling scrolls the page; Ctrl + scroll (or a trackpad pinch) zooms
+  canvas.addEventListener('wheel', e => { if (!e.ctrlKey) e.stopImmediatePropagation(); }, { capture: true });
+  $('hint').textContent = matchMedia('(pointer: coarse)').matches
+    ? 'Swipe sideways to rotate; pinch to zoom.'
+    : 'Drag to rotate; hold Ctrl and scroll to zoom.';
+
+  scene.add(new THREE.HemisphereLight(0xdfe6f5, 0x1a2030, 2.2));
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  sun.position.set(2, 6, 5);
+  scene.add(sun);
+
+  const bg = new THREE.Color(C.panel), tmp = new THREE.Color(), v = new THREE.Vector3(), m = new THREE.Matrix4();
+  const glowMap = glowTexture(), retinaColor = new THREE.Color(C.retina);
+  // everything the default camera framing has to include
+  const content = new THREE.Group();
+  scene.add(content);
+  const place = (geo, p) => geo.translate(p.x, p.y, p.z);
+  const at = (x, y, z) => EYE.clone().add(new THREE.Vector3(x, y, z));
+  const neuronMat = color => new THREE.MeshStandardMaterial({
+    color: new THREE.Color(color).multiplyScalar(0.55), emissive: new THREE.Color(color), emissiveIntensity: 0.15, roughness: 0.55,
+  });
+  const glassMat = (color, opacity, side = THREE.FrontSide) => new THREE.MeshStandardMaterial({
+    color, transparent: true, opacity, depthWrite: false, roughness: 0.3, side,
+  });
+  const glowSprite = color => {
+    const s = new THREE.Sprite(new THREE.SpriteMaterial({
+      map: glowMap, color, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+    }));
+    scene.add(s);
+    return s;
+  };
+
+  // eye: cornea, iris and lens at the front; the retina lines the back
+  const eye = new THREE.Group().add(
+    new THREE.Mesh(place(new THREE.SphereGeometry(1, 48, 32), EYE), glassMat('#d8dee9', 0.1)),
+    new THREE.Mesh(place(new THREE.SphereGeometry(0.96, 48, 16, 0, 2 * Math.PI, 0, 70 * DEG).rotateZ(-Math.PI / 2), EYE),
+      glassMat(C.retina, 0.14, THREE.DoubleSide)),
+    new THREE.Mesh(place(new THREE.SphereGeometry(0.55, 32, 12, 0, 2 * Math.PI, 0, 0.8).rotateZ(Math.PI / 2), at(-0.52, 0, 0)),
+      glassMat('#bcd7f0', 0.2, THREE.DoubleSide)),
+    new THREE.Mesh(place(new THREE.RingGeometry(0.14, 0.36, 48).rotateY(-Math.PI / 2), at(-0.9, 0, 0)),
+      new THREE.MeshStandardMaterial({ color: '#5d84ad', roughness: 0.6, side: THREE.DoubleSide })),
+    new THREE.Mesh(place(new THREE.CircleGeometry(0.14, 32).rotateY(-Math.PI / 2), at(-0.9, 0, 0)),
+      new THREE.MeshBasicMaterial({ color: '#05070b', side: THREE.DoubleSide })),
+    new THREE.Mesh(place(new THREE.SphereGeometry(0.32, 24, 16).scale(0.45, 1, 1), at(-0.72, 0, 0)), glassMat('#dfeaf7', 0.25)),
+  );
+  content.add(eye);
+
+  // retinal ganglion cells; the wave sweeps across them from bottom to top
+  const radial = deg => new THREE.Vector3(Math.cos(deg * DEG), 0, Math.sin(deg * DEG));
+  const rgcAt = EYE.clone().addScaledVector(radial(38), 0.88);
+  const CAP = 62 * DEG, GOLDEN = Math.PI * (3 - Math.sqrt(5)), cells = [], lag = [];
+  for (let i = 0; i < 120; i++) {
+    const th = Math.acos(1 - (1 - Math.cos(CAP)) * (i + 0.5) / 120), ph = i * GOLDEN;
+    const dir = new THREE.Vector3(Math.cos(th), Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph));
+    const p = EYE.clone().addScaledVector(dir, 0.9);
+    // leave the optic disc and the modelled cell clear
+    if (th < 8 * DEG || p.distanceTo(rgcAt) < 0.14) continue;
+    cells.push(p);
+    // the same lag as across a 2D population, 2π(u − ½), with u the position along the wave
+    lag.push(Math.PI * dir.y / Math.sin(CAP));
+  }
+  const rgcDots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.03, 10, 8), new THREE.MeshBasicMaterial(), cells.length);
+  cells.forEach((p, i) => {
+    rgcDots.setMatrixAt(i, m.makeTranslation(p.x, p.y, p.z));
+    rgcDots.setColorAt(i, retinaColor);
+  });
+  const dotGlowGeo = new THREE.BufferGeometry().setFromPoints(cells);
+  dotGlowGeo.setAttribute('color', new THREE.BufferAttribute(new Float32Array(cells.length * 3), 3));
+  const dotGlow = dotGlowGeo.getAttribute('color');
+  scene.add(rgcDots, new THREE.Points(dotGlowGeo, new THREE.PointsMaterial({
+    size: 0.3, map: glowMap, vertexColors: true, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending,
+  })));
+
+  // the modelled ganglion cell, whose rate enters the learning rule; its axon leaves through the optic disc
+  const nervePts = [at(0.9, 0, 0), at(1.6, 0.06, 0), new THREE.Vector3(-1.2, 0.12, 0), new THREE.Vector3(-0.3, 0.02, 0)];
+  const trunk = new THREE.CatmullRomCurve3([
+    rgcAt, ...[28, 18, 8].map(a => EYE.clone().addScaledVector(radial(a), 0.88)), at(1, 0, 0), ...nervePts.slice(1), BRANCH,
+  ]);
+  const trunkLen = trunk.getLength();
+  const rgcParts = [place(new THREE.SphereGeometry(0.065, 20, 14), rgcAt), new THREE.TubeGeometry(trunk, 240, 0.03, 8)];
+  const outward = radial(38), up = new THREE.Vector3(0, 1, 0), across = new THREE.Vector3().crossVectors(outward, up);
+  const rgcRand = mulberry32(5);
+  for (const a of [30, 120, 210, 300]) {
+    const dir = up.clone().multiplyScalar(Math.cos(a * DEG)).addScaledVector(across, Math.sin(a * DEG)).addScaledVector(outward, 0.1);
+    growBranch(rgcRand, rgcAt, dir, 0.17, 0.014, 1, 0.2, rgcParts);
+  }
+  const rgcMat = neuronMat(C.retina), rgcGlow = glowSprite(C.retina);
+  rgcGlow.position.copy(rgcAt);
+  content.add(new THREE.Mesh(merge(rgcParts), rgcMat));
+
+  // optic nerve: the modelled axon runs among the axons of other ganglion cells
+  const nerve = new THREE.CatmullRomCurve3(nervePts), frames = nerve.computeFrenetFrames(40, false), bundle = [];
+  for (let k = 0; k < 7; k++) {
+    const a = 2 * Math.PI * k / 7;
+    const pts = frames.normals.map((nrm, i) => nerve.getPointAt(i / 40)
+      .addScaledVector(nrm, 0.1 * Math.cos(a)).addScaledVector(frames.binormals[i], 0.1 * Math.sin(a)));
+    bundle.push(new THREE.TubeGeometry(new THREE.CatmullRomCurve3(pts), 60, 0.01, 5));
+  }
+  content.add(
+    new THREE.Mesh(new THREE.TubeGeometry(nerve, 64, 0.17, 24), glassMat('#cfd6e2', 0.14)),
+    new THREE.Mesh(merge(bundle), new THREE.MeshStandardMaterial({ color: C.retina, transparent: true, opacity: 0.3, roughness: 0.6 })));
+
+  // one neuron stands for each target population
+  const targets = {}, myelin = [];
+  for (const k of ['A', 'B']) {
+    const T = buildTarget(TARGETS[k]);
+    T.mat = neuronMat(TARGETS[k].color);
+    T.mesh = new THREE.Mesh(T.cell, T.mat);
+    T.glow = glowSprite(TARGETS[k].color);
+    T.glow.position.copy(TARGETS[k].at);
+    T.axonLen = T.axon.getLength();
+    myelin.push(...T.myelin);
+    content.add(T.mesh);
+    targets[k] = T;
+  }
+  content.add(new THREE.Mesh(merge(myelin), new THREE.MeshStandardMaterial({ color: '#e3e8f0', roughness: 0.5 })));
+
+  // axon branches ending in synaptic boutons: the synapses R→A and R→B
+  const potColor = new THREE.Color(C.match), depColor = new THREE.Color(C.mismatch), white = new THREE.Color('#ffffff');
+  const syn = {};
+  for (const k of ['A', 'B']) {
+    const T = targets[k];
+    const curve = new THREE.CubicBezierCurve3(
+      BRANCH.clone(), BRANCH.clone().add(new THREE.Vector3(0.6, 0.12 * TARGETS[k].side, 0)),
+      T.bouton.clone().addScaledVector(T.approach, 0.6), T.bouton.clone());
+    const mat = new THREE.MeshStandardMaterial({ roughness: 0.45 }), boutonMat = new THREE.MeshStandardMaterial({ roughness: 0.4 });
+    const tube = new THREE.Mesh(new THREE.BufferGeometry(), mat);
+    const bouton = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), boutonMat);
+    bouton.position.copy(T.bouton);
+    // after pruning, a retracted stub ending in a retraction bulb remains
+    const stubCurve = new THREE.CatmullRomCurve3(Array.from({ length: 6 }, (_, i) => curve.getPointAt(0.22 * i / 5)));
+    const stubMat = new THREE.MeshStandardMaterial({ color: C.muted, roughness: 0.6 });
+    const stub = new THREE.Group().add(
+      new THREE.Mesh(new THREE.TubeGeometry(stubCurve, 12, 0.014, 8), stubMat),
+      new THREE.Mesh(place(new THREE.SphereGeometry(0.032, 16, 12), stubCurve.getPointAt(1)), stubMat));
+    const bdnfPath = new THREE.CurvePath();
+    bdnfPath.add(trunk);
+    bdnfPath.add(curve);
+    content.add(tube, bouton, stub);
+    syn[k] = { curve, length: curve.getLength(), tube, bouton, mat, boutonMat, stub, bdnfPath, q: -1, flash: 0 };
+  }
+
+  function paintSynapse(k, dt) {
+    const L = links[k], S = syn[k];
+    S.tube.visible = S.bouton.visible = !L.pruned;
+    S.stub.visible = L.pruned;
+    if (L.pruned) return;
+    // rebuild only when the radius changes visibly
+    const q = Math.round((0.008 + 0.027 * L.w) * 1000);
+    if (q !== S.q) {
+      S.q = q;
+      S.tube.geometry.dispose();
+      S.tube.geometry = new THREE.TubeGeometry(S.curve, 64, q / 1000, 10);
+    }
+    S.bouton.scale.setScalar(0.045 + 0.075 * L.w);
+    const a = Math.abs(L.drive) > TINT_FROM ? Math.min(1, Math.abs(L.drive) / 2) : 0;
+    const tint = L.drive > 0 ? potColor : depColor;
+    S.mat.color.copy(retinaColor).lerp(tint, a);
+    S.mat.emissive.copy(tint).multiplyScalar(0.6 * a);
+    S.flash = Math.max(0, S.flash - dt / 0.25);
+    S.boutonMat.color.copy(S.mat.color);
+    S.boutonMat.emissive.copy(S.mat.emissive).lerp(white, 0.7 * S.flash);
+  }
+
+  // action potentials (display only): fired at SPIKES_PER_S × the firing rate
+  const spikeMesh = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(0.055, 10, 8),
+    new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    MAX_SPIKES);
+  spikeMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  spikeMesh.frustumCulled = false;
+  spikeMesh.count = 0;
+  scene.add(spikeMesh);
+  const spikeColor = { R: new THREE.Color('#ffe2b0'), A: new THREE.Color('#cde9ff'), B: new THREE.Color('#f0dcff') };
+  let spikes = [];
+
+  function updateSpikes(dt) {
+    const fire = (key, rate) => {
+      if (Math.random() < SPIKES_PER_S * rate * dt) spikes.push({ key, d: 0 });
+    };
+    if (sim.retinaOn) fire('R', groups.R.rate);
+    fire('A', groups.A.rate);
+    fire('B', groups.B.rate);
+    let n = 0;
+    const show = (p, key) => {
+      if (n === MAX_SPIKES) return;
+      spikeMesh.setMatrixAt(n, m.makeTranslation(p.x, p.y, p.z));
+      spikeMesh.setColorAt(n++, spikeColor[key]);
+    };
+    spikes = spikes.filter(sp => {
+      const before = sp.d - trunkLen;
+      sp.d += SPIKE_SPEED * dt;
+      if (sp.key !== 'R') {
+        const T = targets[sp.key];
+        if (sp.d > T.axonLen) return false;
+        show(T.axon.getPointAt(sp.d / T.axonLen, v), sp.key);
+        return true;
+      }
+      if (sp.d <= trunkLen) {
+        show(trunk.getPointAt(sp.d / trunkLen, v), 'R');
+        return true;
+      }
+      // past the branch point the action potential invades both axon branches
+      let alive = false;
+      for (const k of ['A', 'B']) {
+        const S = syn[k], along = sp.d - trunkLen;
+        if (links[k].pruned) continue;
+        if (along <= S.length) {
+          show(S.curve.getPointAt(along / S.length, v), 'R');
+          alive = true;
+        } else if (before <= S.length) {
+          S.flash = 1;
+        }
+      }
+      return alive;
+    });
+    spikeMesh.count = n;
+    spikeMesh.instanceMatrix.needsUpdate = true;
+    if (spikeMesh.instanceColor) spikeMesh.instanceColor.needsUpdate = true;
+  }
+
+  const MAX_DOTS = 96, bdnf = new THREE.Color(C.bdnf);
+  const dots = new THREE.InstancedMesh(
+    new THREE.SphereGeometry(0.06, 12, 8),
+    new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false, blending: THREE.AdditiveBlending }),
+    MAX_DOTS);
+  dots.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+  dots.frustumCulled = false;
+  for (let i = 0; i < MAX_DOTS; i++) dots.setColorAt(i, bdnf);
+  dots.count = 0;
+  scene.add(dots);
+
+  // BDNF travels retrogradely, from the synapse (s = 1) back to the ganglion cell body (s = 0)
+  function paintDots() {
+    const n = Math.min(particles.length, MAX_DOTS);
+    for (let i = 0; i < n; i++) {
+      const p = particles[i];
+      syn[p.k].bdnfPath.getPoint(p.s, v);
+      dots.setMatrixAt(i, m.makeTranslation(v.x, v.y, v.z));
+      dots.setColorAt(i, tmp.copy(bdnf).multiplyScalar(0.25 + 0.75 * p.s));
+    }
+    dots.count = n;
+    dots.instanceMatrix.needsUpdate = true;
+    dots.instanceColor.needsUpdate = true;
+  }
+
+  const labs = { R: $('labR'), N: $('labN'), A: $('labA'), B: $('labB') };
+  const synLabs = { A: $('labSynA'), B: $('labSynB') }, synStatus = { A: $('stSynA'), B: $('stSynB') };
+  // a sample of each structure's vertices, projected every frame to find its on-screen outline
+  const sample = (...meshes) => meshes.flatMap(mesh => {
+    const p = mesh.geometry.attributes.position, pts = [];
+    for (let i = 0; i < p.count; i += 17) pts.push(new THREE.Vector3().fromBufferAttribute(p, i));
+    return pts;
+  });
+  const outlines = { R: sample(...eye.children), A: sample(targets.A.mesh), B: sample(targets.B.mesh) };
+  const nerveLabelAt = nerve.getPointAt(0.5).add(new THREE.Vector3(0, -0.3, 0));
+  const synLabelAt = { A: syn.A.curve.getPointAt(0.45), B: syn.B.curve.getPointAt(0.45) };
+  const shown = { R: '', A: '', B: '' };
+
+  function toScreen(p, w, h) {
+    v.copy(p).project(camera);
+    return [(v.x + 1) / 2 * w, (1 - v.y) / 2 * h];
+  }
+
+  // ax, ay: the share of the label's width and height that lies left of and above (x, y); kept inside the view
+  function moveLabel(el, x, y, ax, ay, w) {
+    const lw = el.offsetWidth, lh = el.offsetHeight;
+    const left = Math.min(Math.max(x - ax * lw, 2), w - lw - 2), top = y - ay * lh;
+    el.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px)`;
+    return { left, top, right: left + lw, bottom: top + lh };
+  }
+
+  const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+  // labels sit just outside each structure's on-screen outline, so they stay clear of it at any angle
+  function placeLabels() {
+    const w = box.clientWidth, h = box.clientHeight, placed = [];
+    // on a narrow view the full retina label would run into the synapse labels
+    const r = w < 520 ? 'Retina' : sim.retinaOn ? 'Retina: spontaneous wave' : 'Retina: silent';
+    if (shown.R !== r) labs.R.textContent = shown.R = r;
+    for (const k of ['A', 'B']) {
+      const L = links[k], s = L.pruned ? 'pruned' : L.w >= STABLE_AT ? 'stabilised' : 'w = ' + L.w.toFixed(2);
+      if (shown[k] !== s) {
+        synStatus[k].textContent = shown[k] = s;
+        synStatus[k].classList.toggle('pruned', L.pruned);
+      }
+    }
+    for (const key of ['R', 'A', 'B']) {
+      let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
+      for (const p of outlines[key]) {
+        const [sx, sy] = toScreen(p, w, h);
+        left = Math.min(left, sx);
+        right = Math.max(right, sx);
+        top = Math.min(top, sy);
+        bottom = Math.max(bottom, sy);
+      }
+      if (key === 'B') placed.push(moveLabel(labs.B, (left + right) / 2, bottom + 4, 0.5, 0, w));
+      else placed.push(moveLabel(labs[key], (left + right) / 2, top - 4, 0.5, 1, w));
+    }
+    let [sx, sy] = toScreen(synLabelAt.A, w, h);
+    placed.push(moveLabel(synLabs.A, sx - 10, sy - 2, 1, 1, w));
+    [sx, sy] = toScreen(synLabelAt.B, w, h);
+    placed.push(moveLabel(synLabs.B, sx - 10, sy + 2, 1, 0, w));
+    [sx, sy] = toScreen(nerveLabelAt, w, h);
+    const nerveLabel = moveLabel(labs.N, sx, sy, 0.5, 0, w);
+    // on small screens the optic nerve label would collide with the others
+    labs.N.style.visibility = placed.some(b => overlap(b, nerveLabel)) ? 'hidden' : '';
+  }
+
+  const bounds = new THREE.Box3().setFromObject(content), size = bounds.getSize(new THREE.Vector3());
+  bounds.getCenter(controls.target);
+  const home = new THREE.Vector3(-0.15, 0.25, 1).normalize();
+  camera.position.copy(controls.target).add(home);
+  // distance at which the whole model fits, leaving about 32 px above and below it for the labels
+  const fitDistance = () => {
+    const tanV = Math.tan(camera.fov * DEG / 2), w = box.clientWidth, h = box.clientHeight;
+    return Math.max(size.x / 2 / (1 - 32 / w) / (tanV * camera.aspect), size.y / 2 / (1 - 64 / h) / tanV) + size.z / 2;
+  };
+
+  function resize() {
+    const w = box.clientWidth, h = box.clientHeight;
+    if (!w || !h) return;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    const dir = camera.position.clone().sub(controls.target);
+    camera.position.copy(controls.target).addScaledVector(dir.lengthSq() ? dir.normalize() : home, fitDistance());
+    controls.maxDistance = 2 * fitDistance();
+    controls.update();
+  }
+  new ResizeObserver(resize).observe(box);
+  resize();
+
+  $('resetView').addEventListener('click', () => {
+    camera.position.copy(controls.target).addScaledVector(home, fitDistance());
+    controls.update();
+  });
+
+  function draw(dt) {
+    for (let i = 0; i < cells.length; i++) {
+      const r = sim.retinaOn ? rateOf(groups.R, lag[i]) : 0;
+      rgcDots.setColorAt(i, tmp.copy(bg).lerp(retinaColor, 0.2 + 0.8 * r));
+      tmp.copy(retinaColor).multiplyScalar(0.9 * r).toArray(dotGlow.array, i * 3);
+    }
+    rgcDots.instanceColor.needsUpdate = true;
+    dotGlow.needsUpdate = true;
+    const rR = groups.R.rate;
+    rgcMat.emissiveIntensity = 0.1 + 0.8 * rR;
+    rgcGlow.material.opacity = rR;
+    rgcGlow.scale.setScalar(0.2 + 0.35 * rR);
+    for (const k of ['A', 'B']) {
+      const r = groups[k].rate, T = targets[k];
+      T.mat.emissiveIntensity = 0.12 + 0.75 * r;
+      T.glow.material.opacity = 0.8 * r;
+      T.glow.scale.setScalar(0.6 + 0.9 * r);
+      paintSynapse(k, dt);
+    }
+    updateSpikes(dt);
+    paintDots();
+    controls.update();
+    renderer.render(scene, camera);
+    placeLabels();
+  }
+
+  return { draw };
+}
+
+const view = createView();
+
+// ---------- main loop ----------
+
+let last = performance.now(), lastReadout = 0;
+function frame(now) {
+  const realDt = Math.min(0.05, Math.max(0, (now - last) / 1000));
+  last = now;
+  const simDt = sim.running ? realDt * sim.speed : 0;
+  for (let remaining = simDt; remaining > 1e-9;) {
+    const dt = Math.min(STEP_DT, remaining);
+    step(dt);
+    remaining -= dt;
+  }
+  if (view) view.draw(simDt);
+  if (now - lastReadout > 100) {
+    lastReadout = now;
+    updateReadout();
+  }
+  requestAnimationFrame(frame);
+}
+
+applyPreset('antiphase');
+if (matchMedia('(prefers-reduced-motion: reduce)').matches) setRunning(false);
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>

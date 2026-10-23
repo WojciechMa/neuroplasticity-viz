@@ -8,6 +8,23 @@ Interactive visualisations created as part of a Neuroplasticity course.
 
 Live page: https://wojciechma.github.io/neuroplasticity-viz/
 
+## 3D versions (work in progress)
+
+Not linked from the live page yet, and marked `noindex` for search engines. Both run the same model drawn as neurons: in the eye, a retinal ganglion cell sends its axon through the optic nerve, and the axon branches to synapse onto a neuron of each target population.
+
+- `3d/v1/`: action potentials travel along the axons; the thickness of each branch and the size of its synaptic bouton show the synaptic weight.
+- `3d/v2/`: v1 plus preset viewpoints, three looks (model colours, Golgi stain, calcium imaging) and an "Explain the parts" mode that describes any part you point at or tap.
+
+They use [Three.js](https://threejs.org/) 0.186.1 (MIT licence), stored in `lib/three/`.
+
 ## Run locally
 
-Open `index.html` in a browser. It is a single file with no dependencies and works offline.
+The 2D page is a single file with no dependencies: open `index.html` in a browser. It works offline.
+
+The 3D pages load Three.js as JavaScript modules, which browsers block in files opened from disk. Serve the folder instead, for example with Python:
+
+```
+python -m http.server 8000
+```
+
+then open http://localhost:8000/3d/v1/ or http://localhost:8000/3d/v2/.
