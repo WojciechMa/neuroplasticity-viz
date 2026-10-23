@@ -68,6 +68,8 @@
       url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0.45 0 0 0 0 0.32 0 0 0 0 0.15 0 0 0 0.35 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   }
   .view[data-look="calcium"] .scope { display: block; background: radial-gradient(ellipse at center, transparent 45%, rgba(0, 0, 0, 0.6)); }
+  .view[data-look="golgi"] .lab, .view[data-look="golgi"] .lab span { color: #2b1b0c; text-shadow: 0 0 3px #ecd49c, 0 0 6px #ecd49c; }
+  .view[data-look="golgi"] .lab span.pruned { color: #8f2c1e; }
   .tip {
     position: absolute; left: 0; top: 0; padding: 3px 8px; pointer-events: none; white-space: nowrap;
     border: 1px solid var(--line); border-radius: 6px; background: rgba(15, 20, 32, 0.92); font-size: 0.8rem;
@@ -257,7 +259,7 @@ const DEG = Math.PI / 180;
 const W0 = 0.5, PRUNE_AT = 0.05, STABLE_AT = 0.98;
 const TAU_NOISE = 0.25, STEP_DT = 1 / 120, SAMPLE_DT = 0.1, WINDOW = 300;
 // a wave front crosses the retina at WAVE_SPEED; each ganglion cell fires for BURST seconds as it passes
-const CAP = 62 * DEG, WAVE_SPEED = 45 * DEG, BURST = 2;
+const CAP = 62 * DEG, WAVE_SPEED = 25 * DEG, BURST = 1.5;
 const WAVE_SPAN = 2 * CAP / WAVE_SPEED + BURST;
 // between waves the clock runs this many times faster
 const FAST = 25;
@@ -292,7 +294,7 @@ const links = { A: { w: W0, pruned: false, drive: 0 }, B: { w: W0, pruned: false
 const eyes = { 1: { waves: [], next: 0, count: 0 }, 2: { waves: [], next: 0, count: 0 } };
 const sim = {
   t: 0, running: true, wavesOn: false, preset: 'async', skip: true,
-  interval: 60, eta: 0.1, noise: 0.05, speed: 1.5, sampleClock: 0,
+  interval: 60, eta: 0.13, noise: 0.05, speed: 1.5, sampleClock: 0,
 };
 // where the modelled cells sit on their retina, as a direction from the centre of the eye
 const CELL = new THREE.Vector3(Math.cos(38 * DEG), 0, Math.sin(38 * DEG));
@@ -403,12 +405,13 @@ const signed = x => (Math.abs(x) < 0.005 ? '0.00' : (x > 0 ? '+' : '−') + Math
 function updateReadout() {
   $('driveB').textContent = PRESETS[sim.preset].drivesB;
   for (const k of ['A', 'B']) {
-    const L = links[k], dw = lastWave ? lastWave['dw' + k] : 0;
+    const L = links[k], dw = lastWave ? lastWave['dw' + k] : 0, sofar = record ? L.w - record.w[k] : 0;
     let status;
     if (L.pruned) status = 'pruned';
     else if (L.w >= STABLE_AT) status = 'stabilised';
     else if (sim.preset === 'blocked') status = 'unchanged: no waves';
     else if (!sim.wavesOn) status = 'waiting for retinal waves';
+    else if (record) status = sofar > 0.01 ? 'being potentiated in this wave' : sofar < -0.01 ? 'being depressed in this wave' : 'wave of eye 1 in progress';
     else if (!lastWave) status = 'waiting for the first wave';
     else status = dw > 0.005 ? 'potentiated in the last wave' : dw < -0.005 ? 'depressed in the last wave' : 'no change in the last wave';
     $('act' + k).textContent = lastWave ? lastWave[k].toFixed(2) : '–';
@@ -498,9 +501,9 @@ for (const b of document.querySelectorAll('[data-preset]')) {
 
 // ---------- 3D view ----------
 
-// the eyes look towards -x; each retina lines the back of its eye (+x), where the optic nerve leaves
-const EYE = new THREE.Vector3(-3.6, 1.1, 0), EYE2 = new THREE.Vector3(-3.6, -1.5, 0);
-const CHIASM = new THREE.Vector3(-1.4, -0.15, 0), BRANCH = new THREE.Vector3(0.5, 0, 0);
+// the eyes sit side by side, as in a head, and look towards -x; each retina lines the back of its eye (+x), where the optic nerve leaves
+const EYE = new THREE.Vector3(-3.6, 0, 1.5), EYE2 = new THREE.Vector3(-3.6, 0, -1.5);
+const CHIASM = new THREE.Vector3(-1.3, 0, 0), BRANCH = new THREE.Vector3(0.5, 0, 0);
 const SOMA_R = 0.2, SPIKE_SPEED = 8, SPIKES_PER_S = 10, MAX_SPIKES = 300;
 const TARGETS = {
   A: { at: new THREE.Vector3(2.7, 1.25, -0.1), color: C.a, seed: 11, side: 1 },
@@ -723,7 +726,7 @@ function createView() {
       const dir = new THREE.Vector3(Math.cos(th), Math.sin(th) * Math.cos(ph), Math.sin(th) * Math.sin(ph));
       // leave the optic disc and the modelled cell clear
       if (th < 8 * DEG || dir.distanceTo(CELL) < 0.16) continue;
-      cells.push({ eye, dir, p: centre.clone().addScaledVector(dir, 0.9) });
+      cells.push({ eye, dir, p: centre.clone().addScaledVector(dir, 0.9), rate: 0, ca: 0 });
     }
   }
   const rgcDots = new THREE.InstancedMesh(new THREE.SphereGeometry(0.03, 10, 8), new THREE.MeshBasicMaterial(), cells.length);
@@ -755,9 +758,9 @@ function createView() {
   ];
   // axons sharing a nerve run side by side
   const shift = (pts, dy, dz) => pts.map(p => rel(p, 0, dy, dz));
-  const nerve1Pts = [rel(EYE, 0.9, 0, 0), rel(EYE, 1.5, -0.12, 0), new THREE.Vector3(-1.75, 0.35, 0), CHIASM];
-  const nerve2Pts = [rel(EYE2, 0.9, 0, 0), rel(EYE2, 1.5, 0.12, 0), new THREE.Vector3(-1.75, -0.7, 0), CHIASM];
-  const tractPts = [CHIASM, new THREE.Vector3(-0.8, -0.05, 0), new THREE.Vector3(-0.25, 0, 0)];
+  const nerve1Pts = [rel(EYE, 0.9, 0, 0), rel(EYE, 1.4, 0, -0.15), new THREE.Vector3(-1.75, 0, 0.6), CHIASM];
+  const nerve2Pts = [rel(EYE2, 0.9, 0, 0), rel(EYE2, 1.4, 0, 0.15), new THREE.Vector3(-1.75, 0, -0.6), CHIASM];
+  const tractPts = [CHIASM, new THREE.Vector3(-0.8, 0, 0), new THREE.Vector3(-0.25, 0, 0)];
 
   // the modelled ganglion cell of eye 1, whose rate enters the learning rule
   const trunk = new THREE.CatmullRomCurve3([...retinaPath(EYE), ...nerve1Pts.slice(1), ...tractPts.slice(1), BRANCH]);
@@ -830,6 +833,7 @@ function createView() {
 
   // axon branches ending in synaptic boutons: the synapses R→A and R→B
   const potColor = new THREE.Color(C.match), depColor = new THREE.Color(C.mismatch), white = new THREE.Color('#ffffff');
+  const boutonSize = w => 0.045 + 0.075 * w;
   const syn = {};
   for (const k of ['A', 'B']) {
     const T = targets[k];
@@ -840,6 +844,7 @@ function createView() {
     const tube = new THREE.Mesh(new THREE.BufferGeometry(), mat);
     const bouton = new THREE.Mesh(new THREE.SphereGeometry(1, 20, 14), boutonMat);
     bouton.position.copy(T.bouton);
+    bouton.scale.setScalar(boutonSize(W0));
     // after pruning, a retracted stub ending in a retraction bulb remains
     const stubCurve = new THREE.CatmullRomCurve3(Array.from({ length: 6 }, (_, i) => curve.getPointAt(0.22 * i / 5)));
     const stubMat = new THREE.MeshStandardMaterial({ color: C.muted, roughness: 0.6 });
@@ -865,7 +870,7 @@ function createView() {
       S.tube.geometry.dispose();
       S.tube.geometry = new THREE.TubeGeometry(S.curve, 64, q / 1000, 10);
     }
-    S.bouton.scale.setScalar(0.045 + 0.075 * L.w);
+    S.bouton.scale.setScalar(boutonSize(L.w));
     S.flash = Math.max(0, S.flash - dt / 0.25);
     if (look === 'golgi') {
       S.mat.color.copy(stain);
@@ -1030,6 +1035,7 @@ function createView() {
         synStatus[k].classList.toggle('pruned', L.pruned);
       }
     }
+    const extent = {};
     for (const key of ['R', 'E', 'A', 'B']) {
       let left = Infinity, right = -Infinity, top = Infinity, bottom = -Infinity;
       for (const p of outlines[key]) {
@@ -1040,37 +1046,59 @@ function createView() {
         top = Math.min(top, s[1]);
         bottom = Math.max(bottom, s[1]);
       }
-      labs[key].style.visibility = left < Infinity ? '' : 'hidden';
-      if (left === Infinity) continue;
-      if (key === 'R' || key === 'A') placed.push(moveLabel(labs[key], (left + right) / 2, top - 4, 0.5, 1, w));
-      else placed.push(moveLabel(labs[key], (left + right) / 2, bottom + 4, 0.5, 0, w));
+      // a label whose structure is out of view would otherwise be pinned to the edge
+      const inView = left < w && right > 0 && top < h && bottom > 0;
+      labs[key].style.visibility = inView ? '' : 'hidden';
+      if (inView) extent[key] = { x: (left + right) / 2, top, bottom };
     }
+    // both eye labels go above the eyes, unless the eyes are too close side by side: then the lower eye gets its label below
+    const e1 = extent.R, e2 = extent.E;
+    const lowerEye = e1 && e2 && Math.abs(e1.x - e2.x) < (labs.R.offsetWidth + labs.E.offsetWidth) / 2 + 8 ? (e1.top > e2.top ? 'R' : 'E') : null;
+    for (const [key, b] of Object.entries(extent)) {
+      if (key === 'B' || key === lowerEye) placed.push(moveLabel(labs[key], b.x, b.bottom + 4, 0.5, 0, w));
+      else placed.push(moveLabel(labs[key], b.x, b.top - 4, 0.5, 1, w));
+    }
+    const visible = s => s && s[0] > 0 && s[0] < w && s[1] > 0 && s[1] < h;
     for (const k of ['A', 'B']) {
       const s = toScreen(synLabelAt[k], w, h);
-      synLabs[k].style.visibility = s ? '' : 'hidden';
-      if (s) placed.push(k === 'A' ? moveLabel(synLabs.A, s[0] - 10, s[1] - 2, 1, 1, w) : moveLabel(synLabs.B, s[0] - 10, s[1] + 2, 1, 0, w));
+      synLabs[k].style.visibility = visible(s) ? '' : 'hidden';
+      if (visible(s)) placed.push(k === 'A' ? moveLabel(synLabs.A, s[0] - 10, s[1] - 2, 1, 1, w) : moveLabel(synLabs.B, s[0] - 10, s[1] + 2, 1, 0, w));
     }
-    const s = toScreen(chiasmLabelAt, w, h), chiasmLabel = s && moveLabel(labs.N, s[0], s[1], 0.5, 0, w);
+    const s = toScreen(chiasmLabelAt, w, h), chiasmLabel = visible(s) && moveLabel(labs.N, s[0], s[1], 0.5, 0, w);
     // on small screens the chiasm label would collide with the others
     labs.N.style.visibility = chiasmLabel && !placed.some(b => overlap(b, chiasmLabel)) ? '' : 'hidden';
   }
 
-  const bounds = new THREE.Box3().setFromObject(content), size = bounds.getSize(new THREE.Vector3());
-  const centre = bounds.getCenter(new THREE.Vector3());
-  const home = new THREE.Vector3(-0.15, 0.25, 1).normalize();
-  // distance at which the whole model fits, leaving about 32 px above and below it for the labels
-  const fitDistance = () => {
-    const tanV = Math.tan(camera.fov * DEG / 2), w = box.clientWidth, h = box.clientHeight;
-    return Math.max(size.x / 2 / (1 - 32 / w) / (tanV * camera.aspect), size.y / 2 / (1 - 64 / h) / tanV) + size.z / 2;
+  // points spread over the model's surfaces, for framing it from any direction
+  content.updateMatrixWorld(true);
+  const framePts = [];
+  content.traverse(o => {
+    const p = o.isMesh && o.geometry.attributes.position;
+    for (let i = 0; p && i < p.count; i += 23) framePts.push(new THREE.Vector3().fromBufferAttribute(p, i).applyMatrix4(o.matrixWorld));
+  });
+  const centre = new THREE.Box3().setFromPoints(framePts).getCenter(new THREE.Vector3());
+  // overview from behind and above, so both eyes show side by side; the side view sees them one behind the other
+  const home = new THREE.Vector3(0.66, 0.4, 0.64).normalize(), sideways = new THREE.Vector3(-0.15, 0.25, 1).normalize();
+  // camera distance along dir at which the whole model fits, leaving about 32 px above and below it for the labels
+  const fitDistance = dir => {
+    const tanV = Math.tan(camera.fov * DEG / 2);
+    const tanX = tanV * camera.aspect * (1 - 32 / box.clientWidth), tanY = tanV * (1 - 64 / box.clientHeight);
+    const right = new THREE.Vector3().crossVectors(camera.up, dir).normalize(), up = new THREE.Vector3().crossVectors(dir, right);
+    let d = 0;
+    for (const p of framePts) {
+      v.subVectors(p, centre);
+      d = Math.max(d, Math.abs(v.dot(right)) / tanX + v.dot(dir), Math.abs(v.dot(up)) / tanY + v.dot(dir));
+    }
+    return d;
   };
 
   // ---------- preset viewpoints: [camera target, camera position] ----------
   const synapsesAt = syn.A.bouton.position.clone().add(syn.B.bouton.position).multiplyScalar(0.5);
   const VIEWS = {
-    overview: () => [centre, centre.clone().addScaledVector(home, fitDistance())],
+    overview: () => [centre, centre.clone().addScaledVector(home, fitDistance(home))],
     eye: () => [at(0.75, 0, 0.3), at(-0.45, 0.1, 0.05)],
     synapses: () => [synapsesAt, synapsesAt.clone().addScaledVector(new THREE.Vector3(-0.35, 0.25, 1).normalize(), 3)],
-    side: () => [centre, centre.clone().addScaledVector(new THREE.Vector3(0.75, 0.3, 0.6).normalize(), fitDistance())],
+    side: () => [centre, centre.clone().addScaledVector(sideways, fitDistance(sideways))],
   };
   let currentView = 'overview', tween = null;
 
@@ -1099,7 +1127,7 @@ function createView() {
     renderer.setSize(w, h, false);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
-    controls.maxDistance = 2 * fitDistance();
+    controls.maxDistance = 2 * fitDistance(home);
     if (currentView) goTo(currentView, false);
     else controls.update();
   }
@@ -1201,8 +1229,8 @@ function createView() {
     soma: ['Cell body (soma)', 'Contains the nucleus and sums the inputs. Its brightness shows the firing rate: target A fires with the waves of eye 1, target B with those of eye 2.', [targets.A.somaMesh, targets.B.somaMesh]],
     axon: ['Axon of a target neuron', 'The output side. It starts at the axon hillock, the bulge of the cell body, and carries the target neuron\'s own action potentials on to the primary visual cortex (V1), which is not shown.', [targets.A.axonMesh, targets.B.axonMesh]],
     myelin: ['Myelin sheath', 'Insulating segments wrapped around the axon by glial cells. Action potentials jump between the gaps (nodes of Ranvier), which speeds up conduction.', [myelinMesh]],
-    spikes: ['Action potentials', 'Brief electrical pulses travelling along the axons. They are drawn more often the higher the firing rate; the model itself works with firing rates.', []],
-    bdnf: ['BDNF', 'Brain-derived neurotrophic factor. It is released at the synapse while pre- and postsynaptic firing coincide, travels back along the axon to the ganglion cell, and helps stabilise the synapse.', []],
+    spikes: ['Action potentials', 'Brief electrical pulses travelling along the axons. They are drawn more often the higher the firing rate; the model itself works with firing rates. Real action potentials reach the thalamus within a few tens of milliseconds; here they are slowed down so you can follow them.', []],
+    bdnf: ['BDNF', 'Brain-derived neurotrophic factor. It is released at the synapse while pre- and postsynaptic firing coincide, travels back along the axon to the ganglion cell, and helps stabilise the synapse. This retrograde transport moves a few micrometres per second, so over this distance it takes hours; here it is sped up to a few seconds.', []],
   };
   const pickables = Object.entries(PARTS).flatMap(([key, part]) => part[2].map(o => { o.userData.part = key; return o; }));
   for (const o of [eye1.sclera, eye2.sclera, ...nerveSheaths, chiasm]) o.userData.shell = true;
@@ -1325,9 +1353,13 @@ function createView() {
     // calcium signals follow the firing rate with a delay
     const follow = 1 - Math.exp(-dt / 0.5);
     for (const k of ['R', 'E', 'A', 'B']) ca[k] += (groups[k].rate - ca[k]) * follow;
+    for (const c of cells) {
+      c.rate = waveRate(c.eye, c.dir, sim.t);
+      c.ca += (c.rate - c.ca) * follow;
+    }
     if (look !== 'golgi') {
       for (let i = 0; i < cells.length; i++) {
-        const c = cells[i], r = waveRate(c.eye, c.dir, sim.t);
+        const c = cells[i], r = look === 'calcium' ? c.ca : c.rate;
         const on = look === 'calcium' ? caGlow : c.eye === 1 ? retinaColor : eye2Color, off = look === 'calcium' ? caDim : bg;
         rgcDots.setColorAt(i, tmp.copy(off).lerp(on, 0.15 + 0.85 * r));
         tmp.copy(on).multiplyScalar(0.9 * r).toArray(dotGlow.array, i * 3);
