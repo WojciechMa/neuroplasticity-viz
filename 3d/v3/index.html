@@ -134,6 +134,7 @@
   <h1>Neuroplasticity course: Activity-dependent synaptic refinement in 3D</h1>
   <p>The same learning rule as on the <a href="../../index.html">2D page</a>, with timing closer to real development. A retinal wave is a short burst of firing that starts at a random spot and sweeps across the retina in a few seconds; waves recur about once a minute, with silence in between. Two eyes now make waves. The modelled ganglion cell of eye 1 sends one axon branch to target A and one to target B, two groups of neurons in the thalamus (the lateral geniculate nucleus, LGN). Other ganglion cells of eye 1 drive target A and a ganglion cell of eye 2 drives target B, so each target fires with the waves of its own eye.</p>
   <p>Press <strong>Start retinal waves</strong>. Between waves the clock fast-forwards, so you don't have to wait a minute; the timeline below the view shows the last five minutes. The synaptic weights change only during the waves of eye 1, one step per wave. Learning is sped up: in the developing brain this refinement takes days.</p>
+  <p>This is an experimental visualisation, not scientific research or an accurate representation of the brain: the anatomy, sizes and timing are simplified and not to scale.</p>
 </header>
 
 <main>
@@ -161,7 +162,7 @@
           <button type="button" data-view="synapses">Synapses</button>
           <button type="button" data-view="side">Side view</button>
         </div>
-        <span class="hint" id="hint">Drag to rotate; hold Ctrl and scroll to zoom.</span>
+        <span class="hint" id="hint">Drag to rotate; right-drag or Shift + drag to move; Ctrl + scroll to zoom.</span>
       </div>
       <div class="view-bar">
         <div class="seg" role="group" aria-label="Look">
@@ -502,12 +503,12 @@ for (const b of document.querySelectorAll('[data-preset]')) {
 // ---------- 3D view ----------
 
 // the eyes sit side by side, as in a head, and look towards -x; each retina lines the back of its eye (+x), where the optic nerve leaves
-const EYE = new THREE.Vector3(-3.6, 0, 1.5), EYE2 = new THREE.Vector3(-3.6, 0, -1.5);
-const CHIASM = new THREE.Vector3(-1.3, 0, 0), BRANCH = new THREE.Vector3(0.5, 0, 0);
+const EYE = new THREE.Vector3(-4.6, 0, 2.1), EYE2 = new THREE.Vector3(-4.6, 0, -2.1);
+const CHIASM = new THREE.Vector3(-1.6, 0, 0), BRANCH = new THREE.Vector3(0.5, 0, 0);
 const SOMA_R = 0.2, SPIKE_SPEED = 8, SPIKES_PER_S = 10, MAX_SPIKES = 300;
 const TARGETS = {
-  A: { at: new THREE.Vector3(2.7, 1.25, -0.1), color: C.a, seed: 11, side: 1 },
-  B: { at: new THREE.Vector3(2.7, -1.25, 0.1), color: C.b, seed: 23, side: -1 },
+  A: { at: new THREE.Vector3(3, 1.75, -0.1), color: C.a, seed: 11, side: 1 },
+  B: { at: new THREE.Vector3(3, -1.75, 0.1), color: C.b, seed: 23, side: -1 },
 };
 
 // seeded random numbers, so the neurons have the same shape on every visit
@@ -655,7 +656,7 @@ function createView() {
   const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
   const controls = new OrbitControls(camera, canvas);
   controls.enableDamping = true;
-  controls.enablePan = false;
+  controls.zoomToCursor = true;
   controls.minDistance = 0.4;
   controls.maxPolarAngle = Math.PI * 0.85;
   // vertical swipes keep scrolling the page; sideways drags rotate the view
@@ -664,7 +665,7 @@ function createView() {
   canvas.addEventListener('wheel', e => { if (!e.ctrlKey) e.stopImmediatePropagation(); }, { capture: true });
   $('hint').textContent = matchMedia('(pointer: coarse)').matches
     ? 'Swipe sideways to rotate; pinch to zoom.'
-    : 'Drag to rotate; hold Ctrl and scroll to zoom.';
+    : 'Drag to rotate; right-drag or Shift + drag to move; Ctrl + scroll to zoom.';
 
   scene.add(new THREE.HemisphereLight(0xdfe6f5, 0x1a2030, 2.2));
   const sun = new THREE.DirectionalLight(0xffffff, 2.2);
@@ -758,9 +759,9 @@ function createView() {
   ];
   // axons sharing a nerve run side by side
   const shift = (pts, dy, dz) => pts.map(p => rel(p, 0, dy, dz));
-  const nerve1Pts = [rel(EYE, 0.9, 0, 0), rel(EYE, 1.4, 0, -0.15), new THREE.Vector3(-1.75, 0, 0.6), CHIASM];
-  const nerve2Pts = [rel(EYE2, 0.9, 0, 0), rel(EYE2, 1.4, 0, 0.15), new THREE.Vector3(-1.75, 0, -0.6), CHIASM];
-  const tractPts = [CHIASM, new THREE.Vector3(-0.8, 0, 0), new THREE.Vector3(-0.25, 0, 0)];
+  const nerve1Pts = [rel(EYE, 0.9, 0, 0), rel(EYE, 1.45, 0, -0.2), new THREE.Vector3(-2.25, 0, 0.8), CHIASM];
+  const nerve2Pts = [rel(EYE2, 0.9, 0, 0), rel(EYE2, 1.45, 0, 0.2), new THREE.Vector3(-2.25, 0, -0.8), CHIASM];
+  const tractPts = [CHIASM, new THREE.Vector3(-1, 0, 0), new THREE.Vector3(-0.3, 0, 0)];
 
   // the modelled ganglion cell of eye 1, whose rate enters the learning rule
   const trunk = new THREE.CatmullRomCurve3([...retinaPath(EYE), ...nerve1Pts.slice(1), ...tractPts.slice(1), BRANCH]);
@@ -778,13 +779,13 @@ function createView() {
   const dA = driverAt('A'), dB = driverAt('B');
   const nbCurve = new THREE.CatmullRomCurve3([
     rel(EYE, 1, 0.04, 0.06), ...shift(nerve1Pts.slice(1), 0.04, 0.07), ...shift(tractPts.slice(1), 0.08, 0.07),
-    new THREE.Vector3(0.9, 0.55, 0.08), dA.p.clone().addScaledVector(dA.dir, 0.4), dA.p,
+    new THREE.Vector3(1, 0.8, 0.08), dA.p.clone().addScaledVector(dA.dir, 0.4), dA.p,
   ]);
   const E2 = ganglionCell(EYE2, 7), eye2Mat = neuronMat(C.eye2), eye2Glow = glowSprite(C.eye2);
   eye2Glow.position.copy(E2.soma);
   const e2Curve = new THREE.CatmullRomCurve3([
     ...retinaPath(EYE2), ...shift(nerve2Pts.slice(1), 0, -0.07), ...shift(tractPts.slice(1), -0.08, -0.07),
-    new THREE.Vector3(0.9, -0.55, -0.08), dB.p.clone().addScaledVector(dB.dir, 0.4), dB.p,
+    new THREE.Vector3(1, -0.8, -0.08), dB.p.clone().addScaledVector(dB.dir, 0.4), dB.p,
   ]);
   const e2Body = new THREE.Mesh(E2.body, eye2Mat), e2Axon = new THREE.Mesh(new THREE.TubeGeometry(e2Curve, 300, 0.022, 8), eye2Mat);
   const nbAxon = new THREE.Mesh(new THREE.TubeGeometry(nbCurve, 260, 0.018, 8), rgcMat);
@@ -1011,9 +1012,9 @@ function createView() {
   }
 
   // ax, ay: the share of the label's width and height that lies left of and above (x, y); kept inside the view
-  function moveLabel(el, x, y, ax, ay, w) {
+  function moveLabel(el, x, y, ax, ay, w, h) {
     const lw = el.offsetWidth, lh = el.offsetHeight;
-    const left = Math.min(Math.max(x - ax * lw, 2), w - lw - 2), top = y - ay * lh;
+    const left = Math.min(Math.max(x - ax * lw, 2), w - lw - 2), top = Math.min(Math.max(y - ay * lh, 2), h - lh - 2);
     el.style.transform = `translate(${left.toFixed(1)}px, ${top.toFixed(1)}px)`;
     return { left, top, right: left + lw, bottom: top + lh };
   }
@@ -1055,16 +1056,16 @@ function createView() {
     const e1 = extent.R, e2 = extent.E;
     const lowerEye = e1 && e2 && Math.abs(e1.x - e2.x) < (labs.R.offsetWidth + labs.E.offsetWidth) / 2 + 8 ? (e1.top > e2.top ? 'R' : 'E') : null;
     for (const [key, b] of Object.entries(extent)) {
-      if (key === 'B' || key === lowerEye) placed.push(moveLabel(labs[key], b.x, b.bottom + 4, 0.5, 0, w));
-      else placed.push(moveLabel(labs[key], b.x, b.top - 4, 0.5, 1, w));
+      if (key === 'B' || key === lowerEye) placed.push(moveLabel(labs[key], b.x, b.bottom + 4, 0.5, 0, w, h));
+      else placed.push(moveLabel(labs[key], b.x, b.top - 4, 0.5, 1, w, h));
     }
     const visible = s => s && s[0] > 0 && s[0] < w && s[1] > 0 && s[1] < h;
     for (const k of ['A', 'B']) {
       const s = toScreen(synLabelAt[k], w, h);
       synLabs[k].style.visibility = visible(s) ? '' : 'hidden';
-      if (visible(s)) placed.push(k === 'A' ? moveLabel(synLabs.A, s[0] - 10, s[1] - 2, 1, 1, w) : moveLabel(synLabs.B, s[0] - 10, s[1] + 2, 1, 0, w));
+      if (visible(s)) placed.push(k === 'A' ? moveLabel(synLabs.A, s[0] - 10, s[1] - 2, 1, 1, w, h) : moveLabel(synLabs.B, s[0] - 10, s[1] + 2, 1, 0, w, h));
     }
-    const s = toScreen(chiasmLabelAt, w, h), chiasmLabel = visible(s) && moveLabel(labs.N, s[0], s[1], 0.5, 0, w);
+    const s = toScreen(chiasmLabelAt, w, h), chiasmLabel = visible(s) && moveLabel(labs.N, s[0], s[1], 0.5, 0, w, h);
     // on small screens the chiasm label would collide with the others
     labs.N.style.visibility = chiasmLabel && !placed.some(b => overlap(b, chiasmLabel)) ? '' : 'hidden';
   }
@@ -1093,12 +1094,15 @@ function createView() {
   };
 
   // ---------- preset viewpoints: [camera target, camera position] ----------
+  // a little closer than the distance that fits everything, so the model runs past the edges of the view
+  const ZOOM = 0.72;
   const synapsesAt = syn.A.bouton.position.clone().add(syn.B.bouton.position).multiplyScalar(0.5);
+  const synapsesDist = syn.A.bouton.position.distanceTo(syn.B.bouton.position) / 2 / (0.8 * Math.tan(camera.fov * DEG / 2));
   const VIEWS = {
-    overview: () => [centre, centre.clone().addScaledVector(home, fitDistance(home))],
+    overview: () => [centre, centre.clone().addScaledVector(home, ZOOM * fitDistance(home))],
     eye: () => [at(0.75, 0, 0.3), at(-0.45, 0.1, 0.05)],
-    synapses: () => [synapsesAt, synapsesAt.clone().addScaledVector(new THREE.Vector3(-0.35, 0.25, 1).normalize(), 3)],
-    side: () => [centre, centre.clone().addScaledVector(sideways, fitDistance(sideways))],
+    synapses: () => [synapsesAt, synapsesAt.clone().addScaledVector(new THREE.Vector3(-0.35, 0.25, 1).normalize(), synapsesDist)],
+    side: () => [centre, centre.clone().addScaledVector(sideways, ZOOM * fitDistance(sideways))],
   };
   let currentView = 'overview', tween = null;
 
