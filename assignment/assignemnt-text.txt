@@ -1,0 +1,17 @@
+Assignment 14* (computational)
+Neuroplasticity is not purely synaptic. Neurons can also change their intrinsic excitability by
+altering ion-channel conductances, including those of sodium and potassium channels. Such
+changes can shift a neuron’s firing-rate-versus-current (f - I) curve in response to prolonged
+changes in activity.
+
+1. Extract Patch-seq current-clamp recordings from the Allen Cell Types Database
+https://celltypes.brain-map.org/data. Select cells with both electrophysiology and
+transcriptomic data, since these modalities are not available for every cell.
+
+2. Use transcriptomic labels to classify the cells as excitatory or inhibitory, then construct
+empirical (f - I) curves for each group.
+
+3. In a simple neuron model, vary leak conductance and compare the resulting (f - I) curves
+for representative excitatory and inhibitory cells. Treat this as a model-based
+perturbation, not evidence that the recorded cells underwent activity-dependent
+plasticity.
