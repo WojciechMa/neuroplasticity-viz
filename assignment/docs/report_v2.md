@@ -13,11 +13,70 @@ Assignment 14* (computational). Sections 1–3 answer the three tasks of the ass
   - The older protocol (8 E, 21 I, plus 1 I cell recorded with both) goes much higher.
 - **Quality control:** sweeps with an unstable or noisy baseline, and sweeps from aborted recordings (padded with exact zeros), are dropped. All 100 cells pass the cell-level checks.
 
+The snippets in this report are condensed from [src/fi_analysis/](../src/fi_analysis/) and run from `assignment/` after scripts 01–02.
+
+<details><summary>How the cells are selected</summary>
+
+```python
+from fi_analysis import data_access
+from fi_analysis.cell_class import classify_ttype
+
+# Joins the t-type tables with the ephys file lists: only cells with BOTH modalities survive.
+cells = data_access.load_cells()
+cells["cell_class"] = cells["t_type"].map(classify_ttype)   # "E", "I" or None (non-neuronal)
+sample = (
+    cells.dropna(subset=["cell_class"])
+    .sample(frac=1, random_state=0)   # fixed seed: the same 100 cells on every run
+    .groupby("cell_class").head(50)   # first 50 E and first 50 I of the shuffled table
+)
+```
+
+</details>
+
+<details><summary>How the current-clamp sweeps are read from an NWB file</summary>
+
+```python
+import h5py
+from fi_analysis import config
+
+with h5py.File("data/raw/975488333.nwb", "r") as f:   # file name = ephys session ID
+    for sweep in f["acquisition"].values():
+        if sweep.attrs.get("neurodata_type") != "CurrentClampSeries":
+            continue
+        stimulus = sweep.attrs["stimulus_description"]
+        if not stimulus.startswith(config.LONG_SQUARE_STIMULI):
+            continue                    # keep only the 1-s current-step protocols
+        v_mv = sweep["data"][:] * sweep["data"].attrs["conversion"] * 1e3   # stored in V, converted to mV
+        print(sweep.attrs["sweep_number"], stimulus)
+
+# 4-8   X1PS_SubThresh_DA_0      (hyperpolarising/subthreshold steps)
+# 16-17 X3LP_Rheo_DA_0           (steps around rheobase)
+# 18-20 X4PS_SupraThresh_DA_0    (suprathreshold steps)
+```
+
+The full loader ([ephys.py](../src/fi_analysis/ephys.py)) also reads the injected current from `stimulus/presentation`, checks that the step lasts 1 s, and drops aborted sweeps.
+
+</details>
+
 ## 2. Task 2: E/I classification from transcriptomic labels and empirical f-I curves
 
 ### 2.1 Classification
 
 Each cell's E/I label comes from its t-type subclass (for example `Sst …` → I, `L5 ET …` → E).
+
+<details><summary>How a t-type is turned into an E/I label</summary>
+
+```python
+from fi_analysis.cell_class import classify_ttype
+
+# Only the first word of the t-type (the subclass) matters:
+# a GABAergic subclass (Lamp5, Sncg, Vip, Sst, Pvalb, Serpinf1, Meis2) -> I, a layer name (L2/3, L5, ...) -> E.
+classify_ttype("L5 ET VISp C1ql2 Cdh13")   # 'E'
+classify_ttype("Sncg Vip Itih5")           # 'I'
+classify_ttype("Astro Aqp4")               # None: non-neuronal, excluded
+```
+
+</details>
 
 | Group | Subclasses in the sample |
 |---|---|
@@ -35,6 +94,27 @@ The groups are not balanced across subclasses. E is dominated by deep-layer cell
 - **Absolute current (left):** E and I cells start firing at similar currents. Above about 150 pA the I curve rises more steeply but only older-protocol cells reach these currents, so this part rests on fewer, different cells.
 - **Current above rheobase (right):** within the shared range, I cells fire faster for the same extra current.
 
+<details><summary>How one cell's f-I curve, rheobase and slope are obtained (E representative)</summary>
+
+```python
+import numpy as np
+import pandas as pd
+
+# One row per cell and step amplitude; rate = spikes during the 1-s step / 1 s (repeats averaged).
+points = pd.read_csv("data/processed/fi_points.csv")
+fi = points[points["cell_id"] == 975488333]
+# current_pa:  90  100  120  140  160
+# rate_hz:      0    3    8   11   14
+
+rheobase = fi.loc[fi["rate_hz"] > 0, "current_pa"].min()          # lowest step with a spike: 100 pA
+shared = fi[fi["current_pa"].between(rheobase, rheobase + 60)]   # shared range: 100-160 pA, 4 points
+slope = np.polyfit(shared["current_pa"], shared["rate_hz"], 1)[0]  # linear fit: 0.18 Hz/pA
+```
+
+Spikes are upward crossings of $dV/dt$ = 20 mV/ms that reach at least −20 mV ([ephys.py](../src/fi_analysis/ephys.py)).
+
+</details>
+
 ### 2.3 E vs I comparison
 
 Features are compared over the shared range with a two-sided Mann-Whitney U test, for all cells and again for the newer-protocol cells only, to rule out protocol mixing.
@@ -49,6 +129,21 @@ Features are compared over the shared range with a two-sided Mann-Whitney U test
 | Resting potential (mV) | −70.9 | −67.9 | 0.050 | 0.12 |
 | Spike threshold (mV) | −34.4 | −34.3 | 0.94 | 0.20 |
 | Post-spike trough (mV) | −47.1 | −50.2 | 0.003 | 0.011 |
+
+<details><summary>How a p-value in the table is computed (f-I slope)</summary>
+
+```python
+import pandas as pd
+from scipy.stats import mannwhitneyu
+
+cells = pd.read_csv("data/processed/cell_summaries.csv")   # one row per cell, all features
+e = cells.loc[cells["cell_class"] == "E", "fi_slope_shared_hz_per_pa"]
+i = cells.loc[cells["cell_class"] == "I", "fi_slope_shared_hz_per_pa"]
+# Rank-based test: no normality assumption, robust to the outliers in the feature plots.
+mannwhitneyu(e, i, alternative="two-sided").pvalue   # 0.022
+```
+
+</details>
 
 ![Feature distributions](../results/figures/features_e_vs_i.png)
 
@@ -70,9 +165,35 @@ For each group, the representative is the cell closest to the group median in rh
 | E | 975488333 | L5 ET VISp C1ql2 Cdh13 | 92 | 16.2 | −63.3 | 100 |
 | I | 862596156 | Sncg Vip Itih5 | 157 | 10.0 | −71.3 | 110 |
 
+"Cell" is the ephys session ID, which is also the NWB file name. The Allen specimen IDs, used on celltypes.brain-map.org, are 975488447 (E) and 862596299 (I).
+
+<details><summary>How the representative cells are chosen and where their parameters come from</summary>
+
+```python
+import pandas as pd
+
+cells = pd.read_csv("data/processed/cell_summaries.csv")
+for cls, group in cells.groupby("cell_class"):
+    x = group[["rheobase_pa", "fi_slope_shared_hz_per_pa"]]
+    z = (x - x.median()) / x.std(ddof=0)                 # distance from the group median, in SDs
+    rep = group.loc[z.pow(2).sum(axis=1).idxmin()]       # cell closest to the median in both features
+    print(cls, rep["cell_id"], rep["t_type"])
+
+# E 975488333 L5 ET VISp C1ql2 Cdh13   (distance 0.003; next: another L5 ET cell, 0.011)
+# I 862596156 Sncg Vip Itih5           (distance 0.008; next: an Sst cell, 0.020)
+```
+
+The other table columns are measured per cell in [ephys.py](../src/fi_analysis/ephys.py):
+
+- $R_{in}$: slope of the steady-state voltage change against current over the hyperpolarising steps.
+- $\tau_m$: exponential fit from the onset of a hyperpolarising step to 90 % of its peak (median over steps).
+- $E_L$: median membrane potential in the 100 ms before the steps.
+
+</details>
+
 - Both models take $g_L = 1/R_{in}$, $C = \tau_m/R_{in}$ and $E_L$ directly from the cell.
 - Each perturbation scales one conductance by 0.5, 0.75, 1, 1.5 or 2 and keeps everything else fixed, including $C$.
-- One cell per group, with only 4 f-I points each in the shared range, so other cells may respond differently. The I representative is a Sncg cell, while the I group is mostly Sst.
+- One cell per group, with only 4 f-I points each in the shared range, so other cells may respond differently. The I representative is a Sncg cell, while the I group is mostly Sst; the runner-up was an Sst cell, so this choice is a close call.
 
 ### 3.2 Leaky integrate-and-fire (LIF) model
 
@@ -83,6 +204,36 @@ For each group, the representative is the cell closest to the group median in rh
 - **Effect of leak:**
   - Rheobase is exactly proportional to $g_L$ ($I_{rh} = g_L(V_{th}-E_L)$).
   - More leak also lowers the shared-range slope: E ×1.27 at half the leak and ×0.74 at double the leak; I ×1.39 and ×0.68.
+
+<details><summary>How the leak perturbation is run (E representative)</summary>
+
+```python
+from dataclasses import replace
+
+import numpy as np
+import pandas as pd
+from fi_analysis.model import fit_lif, lif_rate_hz, passive_parameters
+
+rep = {"cell_id": 975488333, "R_in": 92.4, "tau": 16.2, "E_L": -63.3}   # from the table in 3.1
+points = pd.read_csv("data/processed/fi_points.csv")
+fi = points[points["cell_id"] == rep["cell_id"]]
+
+g_L, C = passive_parameters(rep["R_in"], rep["tau"])   # g_L = 1/R_in = 10.8 nS, C = tau_m * g_L = 175 pF
+# Fits only V_th, V_reset and t_ref to the recorded f-I points; C, g_L and E_L stay as measured.
+base = fit_lif(fi["current_pa"], fi["rate_hz"], C=C, g_L=g_L, E_L=rep["E_L"])
+
+currents = np.arange(0, 401)   # pA
+for scale in (0.5, 0.75, 1.0, 1.5, 2.0):
+    model = replace(base, g_L=base.g_L * scale)   # the perturbation: ONLY g_L changes
+    rates = lif_rate_hz(currents, model)           # analytic LIF rate for each constant current
+    print(scale, model.rheobase)                   # g_L * (V_th - E_L)
+
+# 0.5 -> 47.5 pA, 0.75 -> 71.3 pA, 1 -> 95 pA, 1.5 -> 142.5 pA, 2 -> 190 pA: rheobase proportional to g_L
+```
+
+The model rheobase at ×1 (95 pA) lies midway between the last silent step (90 pA) and the first spiking step (100 pA). The HH-type model is perturbed the same way, by scaling one conductance in a copy of the fitted parameters ([model.py](../src/fi_analysis/model.py)).
+
+</details>
 
 ### 3.3 Hodgkin–Huxley-type model (Na, K and M channels)
 
